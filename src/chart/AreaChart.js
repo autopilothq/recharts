@@ -222,6 +222,27 @@ export class AreaChart extends Component {
     const dotItems = [];
     const { animationId } = this.props;
 
+    function renderDot(itemIndex, activeTooltipIndex) {
+      if (activeTooltipIndex < 0) {
+        return false;
+      };
+
+      let renderIt = true;        
+      const item = allComposedData[itemIndex].points[activeTooltipIndex];
+
+      allComposedData.forEach(function(composedData, composedDataIndex) {
+        if (composedDataIndex !== itemIndex) {
+          const compareTo = composedData.points[activeTooltipIndex];
+
+          if (item.y === compareTo.y && composedDataIndex > itemIndex) {
+            renderIt = false;
+          };
+        }
+      });
+
+      return renderIt;
+    }
+
     const areaItems = items.reduce((result, child, i) => {
       const { dataKey, activeDot } = child.props;
       const currentComposedData = allComposedData[i];
@@ -245,15 +266,17 @@ export class AreaChart extends Component {
           ...getPresentationAttributes(activeDot),
         };
 
-        dotItems.push(this.renderActiveDot(activeDot, dotProps, i));
+        if (renderDot(i, activeTooltipIndex)) {
+          dotItems.push(this.renderActiveDot(activeDot, dotProps, i));
 
-        if (basePoint) {
-          dotItems.push(this.renderActiveDot(activeDot, {
-            ...dotProps,
-            cx: basePoint.x,
-            cy: basePoint.y,
-            pointType: 'basePoint',
-          }, i));
+          if (basePoint) {
+            dotItems.push(this.renderActiveDot(activeDot, {
+              ...dotProps,
+              cx: basePoint.x,
+              cy: basePoint.y,
+              pointType: 'basePoint',
+            }, i));
+          }
         }
       }
 
