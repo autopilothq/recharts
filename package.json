@@ -1,5 +1,5 @@
 {
-  "name": "recharts",
+  "name": "@autopilothq/recharts",
   "version": "0.21.2",
   "description": "React charts",
   "main": "lib/index",
