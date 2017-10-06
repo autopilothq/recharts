@@ -151,7 +151,7 @@ const generateCategoricalChart = ({
 
       const defaultState = this.constructor.createDefaultState(props);
       const updateId = 0;
-      this.state = { ...defaultState, updateId: 0,
+      this.state = { ...defaultState, updateId: 0, xDown: null, yDown: null,
         ...this.updateStateOfAxisMapsOffsetAndStackGroups({ props, ...defaultState, updateId }) };
 
       this.uniqueChartId = uniqueId('recharts');
@@ -709,6 +709,7 @@ const generateCategoricalChart = ({
         onMouseMove: this.handleMouseMove,
         onMouseLeave: this.handleMouseLeave,
         onTouchMove: this.handleTouchMove,
+        onTouchStart: this.handleTouchStart,
       } : {};
       const outerEvents = filterEventAttributes(this.props, this.handleOuterEvent);
 
@@ -1043,7 +1044,26 @@ const generateCategoricalChart = ({
 
     handleTouchMove = (e) => {
       if (e.changedTouches != null && e.changedTouches.length > 0) {
+        const xUp = e.changedTouches[0].clientX;
+        const yUp = e.changedTouches[0].clientY;
+        var xDiff = this.state.xDown - xUp;
+        var yDiff = this.state.yDown - yUp;
+
+        /* detect horizontal scroll and disable the default browser scroll */
+        if (Math.abs(xDiff) > Math.abs(yDiff)) {
+          e.preventDefault();
+        }
+
         this.handleMouseMove(e.changedTouches[0]);
+      }
+    };
+
+    handleTouchStart = (e) => {
+      if (e.changedTouches != null && e.changedTouches.length > 0) {
+        this.setState({
+          xDown: e.touches[0].clientX,
+          yDown: e.touches[0].clientY,
+        });
       }
     };
 
