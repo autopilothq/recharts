@@ -1,6 +1,6 @@
 {
-  "name": "recharts",
-  "version": "1.0.0-apha.5",
+  "name": "@autopilot/recharts",
+  "version": "0.29.0",
   "description": "React charts",
   "main": "lib/index",
   "module": "es6/index",
