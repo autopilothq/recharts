@@ -13,7 +13,7 @@ import LabelList from '../component/LabelList';
 import pureRender from '../util/PureRender';
 import { PRESENTATION_ATTRIBUTES, EVENT_ATTRIBUTES, LEGEND_TYPES,
   getPresentationAttributes, isSsr } from '../util/ReactUtils';
-import { isNumber, uniqueId, interpolateNumber } from '../util/DataUtils';
+import { isNumber, uniqueId, interpolateNumber, getPercentValue } from '../util/DataUtils';
 import { getCateCoordinateOfLine, getValueByDataKey } from '../util/ChartUtils';
 
 
@@ -166,6 +166,25 @@ class Area extends Component {
       baseLine = yAxis.scale(baseValue);
     } else {
       baseLine = xAxis.scale(baseValue);
+    }
+
+    // Autopilot Fix
+    // To bring our area charts to the edge of the bar charts
+    if (props.pullToEdges) {
+      const offset = getPercentValue(props.barCategoryGap, bandSize, 0, true);
+      const edgeOffset = (bandSize - 2 * offset);
+
+      // We create two stubbed points and change the x location of those points
+      // for a visual feel of the area graphs not getting cut off at the middle of the bar chart chart
+      const firstStubbedPoint = _.cloneDeep(points[0]);
+      const lastStubbedPoint = _.cloneDeep(points[points.length - 1]);
+
+      points.unshift(firstStubbedPoint);
+      points.push(lastStubbedPoint);
+
+      const pointsLength = points.length - 1;
+      points[0].x = points[0].x - (edgeOffset / 2);
+      points[pointsLength].x = points[pointsLength].x + (edgeOffset / 2);
     }
 
     return { points, baseLine, layout, isRange, ...offset };

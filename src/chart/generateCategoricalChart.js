@@ -1384,7 +1384,7 @@ const generateCategoricalChart = ({
         activeTooltipIndex >= 0 && points[activeTooltipIndex];
 
       if (hasActive) {
-        const activePoint = points[activeTooltipIndex];
+        const activePoint = this.props.pullToEdges ? points[activeTooltipIndex + 1] : points[activeTooltipIndex];
         const basePoint = isRange && baseLine && baseLine[activeTooltipIndex];
 
         return [
