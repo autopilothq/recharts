@@ -10,8 +10,10 @@ import Layer from '../container/Layer';
 import { PRESENTATION_ATTRIBUTES, getPresentationAttributes,
   filterEventAttributes } from '../util/ReactUtils';
 import Label from '../component/Label';
+import { ifOverflowMatches } from '../util/ChartUtils';
 import { isNumOrStr } from '../util/DataUtils';
-import { validateCoordinateInRange } from '../util/ChartUtils';
+import { LabeledScaleHelper, rectWithCoords } from '../util/CartesianUtils';
+import { warn } from '../util/LogUtils';
 
 const renderLine = (option, props) => {
   let line;
@@ -51,8 +53,13 @@ class ReferenceLine extends Component {
 
     isFront: PropTypes.bool,
     alwaysShow: PropTypes.bool,
+    ifOverflow: PropTypes.oneOf(['hidden', 'visible', 'discard', 'extendDomain']),
     x: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     y: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    segment: PropTypes.arrayOf(PropTypes.shape({
+      x: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+      y: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    })),
 
     className: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     yAxisId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -63,7 +70,7 @@ class ReferenceLine extends Component {
 
   static defaultProps = {
     isFront: false,
-    alwaysShow: false,
+    ifOverflow: 'discard',
     xAxisId: 0,
     yAxisId: 0,
     fill: 'none',
@@ -72,67 +79,98 @@ class ReferenceLine extends Component {
     strokeWidth: 1,
   };
 
-  getEndPoints(isX, isY) {
-    const { xAxis, yAxis, viewBox } = this.props;
-    const { x, y, width, height } = viewBox;
+  getEndPoints(scales, isFixedX, isFixedY, isSegment) {
+    const { viewBox: { x, y, width, height } } = this.props;
 
-    if (isY) {
-      const value = this.props.y;
-      const { scale } = yAxis;
-      const offset = scale.bandwidth ? scale.bandwidth() / 2 : 0;
-      const coord = scale(value) + offset;
+    if (isFixedY) {
+      const { y: yCoord, yAxis: { orientation } } = this.props;
+      const coord = scales.y.apply(yCoord);
 
-      if (validateCoordinateInRange(coord, scale)) {
-        return yAxis.orientation === 'left' ?
-            [{ x, y: coord }, { x: x + width, y: coord }] :
-            [{ x: x + width, y: coord }, { x, y: coord }];
+      if (ifOverflowMatches(this.props, 'discard') &&
+        !scales.y.isInRange(coord)) {
+        return null;
       }
-    } else if (isX) {
-      const value = this.props.x;
-      const { scale } = xAxis;
-      const offset = scale.bandwidth ? scale.bandwidth() / 2 : 0;
-      const coord = scale(value) + offset;
 
-      if (validateCoordinateInRange(coord, scale)) {
-        return xAxis.orientation === 'top' ?
-           [{ x: coord, y }, { x: coord, y: y + height }] :
-           [{ x: coord, y: y + height }, { x: coord, y }];
+      const points = [
+        { x: x + width, y: coord },
+        { x, y: coord },
+      ];
+      return orientation === 'left' ? points.reverse() : points;
+    } if (isFixedX) {
+      const { x: xCoord, xAxis: { orientation } } = this.props;
+      const coord = scales.x.apply(xCoord);
+
+      if (ifOverflowMatches(this.props, 'discard') &&
+        !scales.x.isInRange(coord)) {
+        return null;
       }
+
+      const points = [
+        { x: coord, y: y + height },
+        { x: coord, y },
+      ];
+      return orientation === 'top' ? points.reverse() : points;
+    } if (isSegment) {
+      const { segment } = this.props;
+
+      const points = segment.map(p => scales.apply(p));
+
+      if (ifOverflowMatches(this.props, 'discard') &&
+        _.some(points, p => !scales.isInRange(p))) {
+        return null;
+      }
+
+      return points;
     }
 
     return null;
   }
 
   render() {
-    const { x, y, shape, className } = this.props;
-    const isX = isNumOrStr(x);
-    const isY = isNumOrStr(y);
+    const {
+      x: fixedX,
+      y: fixedY,
+      segment,
+      xAxis,
+      yAxis,
+      shape,
+      className,
+      alwaysShow,
+      clipPathId,
+    } = this.props;
 
-    if (!isX && !isY) { return null; }
+    warn(alwaysShow === undefined,
+      'The alwaysShow prop is deprecated. Please use ifOverflow="extendDomain" instead.');
 
-    const endPoints = this.getEndPoints(isX, isY);
+    const scales = LabeledScaleHelper.create({ x: xAxis.scale, y: yAxis.scale });
 
+    const isX = isNumOrStr(fixedX);
+    const isY = isNumOrStr(fixedY);
+    const isSegment = segment && segment.length === 2;
+
+    const endPoints = this.getEndPoints(scales, isX, isY, isSegment);
     if (!endPoints) { return null; }
 
-    const [start, end] = endPoints;
+    const [{ x: x1, y: y1 }, { x: x2, y: y2 }] = endPoints;
+
+    const clipPath = ifOverflowMatches(this.props, 'hidden') ?
+      `url(#${clipPathId})` :
+      undefined;
+
     const props = {
+      clipPath,
       ...getPresentationAttributes(this.props),
       ...filterEventAttributes(this.props),
-      x1: start.x,
-      y1: start.y,
-      x2: end.x,
-      y2: end.y,
+      x1,
+      y1,
+      x2,
+      y2,
     };
 
     return (
       <Layer className={classNames('recharts-reference-line', className)}>
         {renderLine(shape, props)}
-        {Label.renderCallByParent(this.props, {
-          x: Math.min(props.x1, props.x2),
-          y: Math.min(props.y1, props.y2),
-          width: Math.abs(props.x2 - props.x1),
-          height: Math.abs(props.y2 - props.y1),
-        })}
+        {Label.renderCallByParent(this.props, rectWithCoords({ x1, y1, x2, y2 }))}
       </Layer>
     );
   }

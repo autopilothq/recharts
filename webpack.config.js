@@ -1,37 +1,32 @@
-var path = require('path');
-var LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
-var webpack = require('webpack');
-var BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
-var env = process.env.NODE_ENV;
+const path = require('path');
+const webpack = require('webpack');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
-var config = {
+const env = process.env.NODE_ENV;
+
+const config = {
   entry: './src/index.js',
 
   output: {
+    path: path.resolve(__dirname, 'umd'),
     library: 'Recharts',
     libraryTarget: 'umd',
   },
 
   module: {
-    loaders: [{
+    rules: [{
       test: /\.(js|jsx)$/,
       exclude: /node_modules/,
       include: [
         path.resolve(__dirname, 'src'),
       ],
-      loader: 'babel-loader',
-      query: {
-        plugins: ['lodash'],
-      },
+      use: {
+        loader: 'babel-loader',
+        query: {
+          plugins: ['lodash'],
+        },
+      }
     }],
-  },
-
-  resolve: {
-    alias: {
-      react: path.resolve(__dirname, './node_modules/react'),
-      'react-transition-group':
-          path.resolve(__dirname, './node_modules/react-transition-group'),
-    },
   },
 
   externals: {
@@ -41,11 +36,11 @@ var config = {
       commonjs: 'react',
       amd: 'react',
     },
-    'react-transition-group': {
-      root: ['ReactTransitionGroup'],
-      commonjs2: 'react-transition-group',
-      commonjs: 'react-transition-group',
-      amd: 'react-transition-group',
+    'react-dom': {
+      root: 'ReactDOM',
+      commonjs2: 'react-dom',
+      commonjs: 'react-dom',
+      amd: 'react-dom'
     },
     'prop-types': {
       root: 'PropTypes',
@@ -56,10 +51,6 @@ var config = {
   },
 
   plugins: [
-    new LodashModuleReplacementPlugin({
-      collections: true,
-      shorthands: true
-    }),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': JSON.stringify(env),
     }),
@@ -72,21 +63,13 @@ if (env === 'analyse') {
   );
 }
 
+if (env === 'development') {
+  config.mode = 'development';
+  config.devtool = 'source-map';
+}
+
 if (env === 'production') {
-  config.plugins.push(
-    new webpack.optimize.UglifyJsPlugin({
-      compressor: {
-        pure_getters: true,
-        unsafe: true,
-        unsafe_comps: true,
-        warnings: false,
-      },
-      output: {
-        comments: false,
-      },
-      sourceMap: false,
-    })
-  );
+  config.mode = 'production';
 }
 
 module.exports = config;

@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import { ScatterChart, Scatter, CartesianGrid, Tooltip, Legend,
- XAxis, YAxis, ZAxis, ReferenceLine, ReferenceDot, ReferenceArea, ErrorBar } from 'recharts';
+ XAxis, YAxis, ZAxis, ReferenceLine, ReferenceDot, ReferenceArea, ErrorBar,
+ LabelList } from 'recharts';
 import { changeNumberOfData } from './utils';
 
 const data01 = [
@@ -38,22 +39,43 @@ const data04 = [
   { x: 120, y: 190 },
 ];
 
-const initilaState = {
+const data05 = [{x: 100, y: 200, z: 200}, {x: 100, y: 100, z: 260},
+  {x: 170, y: 300, z: 400}, {x: 140, y: 250, z: 280},
+  {x: 150, y: 400, z: 500}, {x: 110, y: 280, z: 200}];
+
+const data06 = [
+  { x: 0, y: 'Sun', z: 78 },
+  { x: 0, y: 'Mon', z: 40 },
+  { x: 0, y: 'Tue', z: 60 },
+  { x: 3, y: 'Wed', z: 100 },
+];
+
+const initialState = {
   data01,
   data02,
   data03,
   data04,
+  data05,
 };
 
 export default class Demo extends Component {
 
   static displayName = 'ScatterChartDemo';
 
-  state = initilaState;
+  state = initialState;
 
   handleChangeData = () => {
-    this.setState(() => _.mapValues(initilaState, changeNumberOfData));
+    this.setState(() => _.mapValues(initialState, changeNumberOfData));
   };
+
+  renderSquare = (props) => {
+    const { cx, cy, size, xAxis, yAxis, zAxis } = props;
+    const xBandSize = xAxis.bandSize;
+    const yBandSize = yAxis.bandSize;
+
+    return <rect x={cx - xAxis.bandSize / 2} y={cy - yAxis.bandSize / 2} width={xAxis.bandSize} height={yAxis.bandSize} fill="red" fillOpacity={size} />;
+  }
+
 
   render () {
     const { data01, data02, data03, data04 } = this.state;
@@ -76,7 +98,7 @@ export default class Demo extends Component {
             <CartesianGrid />
             <Tooltip />
             <Legend/>
-            <Scatter name="A school" data={data01} fill="#ff7300" />
+            <Scatter name="A school" data={data01} fill="#ff7300" label={{ dataKey: 'x' }} />
           </ScatterChart>
         </div>
 
@@ -124,6 +146,32 @@ export default class Demo extends Component {
             <Legend/>
             <Scatter line lineJointType="monotoneX" shape="wye" legendType="wye" data={data03} fill="#ff7300" />
             <Scatter line shape="square" legendType="square" data={data04} fill="#347300" />
+          </ScatterChart>
+        </div>
+
+        <p>ScatterChart which has default x-axis</p>
+        <div className="scatter-chart-wrapper">
+          <ScatterChart width={400} height={400} margin={{top: 20, right: 20, bottom: 20, left: 20}}>
+            <XAxis dataKey={'x'} name='stature' unit='cm' />
+            <YAxis dataKey={'y'} name='weight' unit='kg'/>
+            <ZAxis dataKey={'z'} range={[60, 400]} name='score' unit='km'/>
+            <CartesianGrid />
+            <Tooltip cursor={{strokeDasharray: '3 3'}}/>
+            <Legend/>
+            <Scatter line lineType="fitting" name='A school' data={data05} legendType="square" fill='#8884d8' shape="square"/>
+          </ScatterChart>
+        </div>
+
+        <p>ScatterChart filled by squares</p>
+        <div className="scatter-chart-wrapper">
+          <ScatterChart width={900} height={300} margin={{top: 20, right: 20, bottom: 20, left: 20}}>
+            <XAxis dataKey="x" type="category" allowDuplicatedCategory={false} domain={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]} allowDuplicatedCategory={false} name="hour"  />
+            <YAxis dataKey="y" type="category" allowDuplicatedCategory={false} domain={['Sun', 'Sat', 'Fri', 'Thu', 'Wed', 'Tue', 'Mon']} allowDuplicatedCategory={false} name="week" />
+            <ZAxis dataKey="z" range={[0.2, 1]} name="score" />
+            <Tooltip cursor={{strokeDasharray: '3 3'}}/>
+            <CartesianGrid fill="#999" />
+            <Legend/>
+            <Scatter name='A school' data={data06} legendType="square" fill='#8884d8' shape={this.renderSquare}/>
           </ScatterChart>
         </div>
       </div>

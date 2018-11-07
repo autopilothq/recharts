@@ -11,6 +11,7 @@ import { warn } from '../util/LogUtils';
 
 class ResponsiveContainer extends Component {
   static displayName = 'ResponsiveContainer';
+
   static propTypes = {
     aspect: PropTypes.number,
     width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -96,8 +97,8 @@ class ResponsiveContainer extends Component {
     );
 
     warn(!aspect || aspect > 0,
-         'The aspect(%s) must be greater than zero.',
-         aspect);
+      'The aspect(%s) must be greater than zero.',
+      aspect);
 
     const calculatedWidth = isPercent(width) ? containerWidth : width;
     let calculatedHeight = isPercent(height) ? containerHeight : height;

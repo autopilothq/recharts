@@ -13,6 +13,7 @@ class XAxis extends Component {
 
   static propTypes = {
     allowDecimals: PropTypes.bool,
+    allowDuplicatedCategory: PropTypes.bool,
     hide: PropTypes.bool,
     // The name of data displayed in the axis
     name: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -23,6 +24,7 @@ class XAxis extends Component {
     domain: PropTypes.arrayOf(PropTypes.oneOfType([
       PropTypes.string,
       PropTypes.number,
+      PropTypes.func,
       PropTypes.oneOf(['auto', 'dataMin', 'dataMax']),
     ])),
     // The key of data displayed in the axis
@@ -76,6 +78,7 @@ class XAxis extends Component {
     allowDataOverflow: false,
     scale: 'auto',
     reversed: false,
+    allowDuplicatedCategory: true,
   };
 
   render() {

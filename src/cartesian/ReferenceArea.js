@@ -8,10 +8,13 @@ import classNames from 'classnames';
 import pureRender from '../util/PureRender';
 import Layer from '../container/Layer';
 import Label from '../component/Label';
-import { PRESENTATION_ATTRIBUTES } from '../util/ReactUtils';
+import { LabeledScaleHelper, rectWithPoints } from '../util/CartesianUtils';
+import { ifOverflowMatches } from '../util/ChartUtils';
 import { isNumOrStr } from '../util/DataUtils';
-import { validateCoordinateInRange } from '../util/ChartUtils';
+import { warn } from '../util/LogUtils';
+import { PRESENTATION_ATTRIBUTES } from '../util/ReactUtils';
 import Rectangle from '../shape/Rectangle';
+
 
 @pureRender
 class ReferenceArea extends Component {
@@ -32,6 +35,7 @@ class ReferenceArea extends Component {
 
     isFront: PropTypes.bool,
     alwaysShow: PropTypes.bool,
+    ifOverflow: PropTypes.oneOf(['hidden', 'visible', 'discard', 'extendDomain']),
     x1: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     x2: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     y1: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
@@ -45,7 +49,7 @@ class ReferenceArea extends Component {
 
   static defaultProps = {
     isFront: false,
-    alwaysShow: false,
+    ifOverflow: 'discard',
     xAxisId: 0,
     yAxisId: 0,
     r: 10,
@@ -55,52 +59,31 @@ class ReferenceArea extends Component {
     strokeWidth: 1,
   };
 
-  getRect(hasX, hasY) {
+  getRect(hasX1, hasX2, hasY1, hasY2) {
     const { x1: xValue1, x2: xValue2, y1: yValue1, y2: yValue2, xAxis,
       yAxis } = this.props;
-    const xScale = xAxis.scale;
-    const yScale = yAxis.scale;
-    const xOffset = xScale.bandwidth ? xScale.bandwidth() / 2 : 0;
-    const yOffset = yScale.bandwidth ? yScale.bandwidth() / 2 : 0;
-    const xRange = xScale.range();
-    const yRange = yScale.range();
-    let x1, x2, y1, y2;
 
-    if (hasX && isNumOrStr(xValue1)) {
-      x1 = xScale(xValue1) + xOffset;
-    } else if (hasY) {
-      x1 = xRange[0];
-    }
-    if (hasX && isNumOrStr(xValue2)) {
-      x2 = xScale(xValue2) + xOffset;
-    } else if (hasY) {
-      x2 = xRange[1];
-    }
-    if (hasY && isNumOrStr(yValue1)) {
-      y1 = yScale(yValue1) + yOffset;
-    } else if (hasX) {
-      y1 = yRange[0];
-    }
-    if (hasY && isNumOrStr(yValue2)) {
-      y2 = yScale(yValue2) + yOffset;
-    } else if (hasX) {
-      y2 = yRange[1];
+    const scale = LabeledScaleHelper.create({ x: xAxis.scale, y: yAxis.scale });
+
+    const p1 = {
+      x: hasX1 ? scale.x.apply(xValue1) : scale.x.rangeMin,
+      y: hasY1 ? scale.y.apply(yValue1) : scale.y.rangeMin,
+    };
+
+    const p2 = {
+      x: hasX2 ? scale.x.apply(xValue2) : scale.x.rangeMax,
+      y: hasY2 ? scale.y.apply(yValue2) : scale.y.rangeMax,
+    };
+
+    if (ifOverflowMatches(this.props, 'discard') &&
+      (!scale.isInRange(p1) || !scale.isInRange(p2))) {
+      return null;
     }
 
-    if (validateCoordinateInRange(x1, xScale) && validateCoordinateInRange(x2, xScale) &&
-      validateCoordinateInRange(y1, yScale) && validateCoordinateInRange(y2, yScale)) {
-      return {
-        x: Math.min(x1, x2),
-        y: Math.min(y1, y2),
-        width: Math.abs(x2 - x1),
-        height: Math.abs(y2 - y1),
-      };
-    }
-
-    return null;
+    return rectWithPoints(p1, p2);
   }
 
-  renderRect(option, props) {
+  static renderRect(option, props) {
     let rect;
 
     if (React.isValidElement(option)) {
@@ -120,21 +103,31 @@ class ReferenceArea extends Component {
   }
 
   render() {
-    const { x1, x2, y1, y2, className } = this.props;
-    const hasX = isNumOrStr(x1) && isNumOrStr(x2);
-    const hasY = isNumOrStr(y1) && isNumOrStr(y2);
+    const { x1, x2, y1, y2, className, alwaysShow, clipPathId } = this.props;
 
-    if (!hasX && !hasY) { return null; }
+    warn(alwaysShow === undefined,
+      'The alwaysShow prop is deprecated. Please use ifOverflow="extendDomain" instead.');
 
-    const rect = this.getRect(hasX, hasY);
+    const hasX1 = isNumOrStr(x1);
+    const hasX2 = isNumOrStr(x2);
+    const hasY1 = isNumOrStr(y1);
+    const hasY2 = isNumOrStr(y2);
+
+    if (!hasX1 && !hasX2 && !hasY1 && !hasY2) { return null; }
+
+    const rect = this.getRect(hasX1, hasX2, hasY1, hasY2);
 
     if (!rect) { return null; }
 
     const { shape } = this.props;
 
+    const clipPath = ifOverflowMatches(this.props, 'hidden') ?
+      `url(#${clipPathId})` :
+      undefined;
+
     return (
       <Layer className={classNames('recharts-reference-area', className)}>
-        {this.renderRect(shape, { ...this.props, ...rect })}
+        {this.constructor.renderRect(shape, { clipPath, ...this.props, ...rect })}
         {Label.renderCallByParent(this.props, rect)}
       </Layer>
     );

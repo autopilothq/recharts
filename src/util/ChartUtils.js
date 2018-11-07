@@ -5,7 +5,7 @@ import {
   stack as shapeStack, stackOrderNone, stackOffsetExpand,
   stackOffsetNone, stackOffsetSilhouette, stackOffsetWiggle,
 } from 'd3-shape';
-import { isNumOrStr, uniqueId, isNumber, getPercentValue } from './DataUtils';
+import { isNumOrStr, uniqueId, isNumber, getPercentValue, mathSign, findEntryInArray } from './DataUtils';
 import ReferenceDot from '../cartesian/ReferenceDot';
 import ReferenceLine from '../cartesian/ReferenceLine';
 import ReferenceArea from '../cartesian/ReferenceArea';
@@ -31,18 +31,10 @@ export const getValueByDataKey = (obj, dataKey, defaultValue) => {
  * @return {Array} Domain of data
  */
 export const getDomainOfDataByKey = (data, key, type, filterNil) => {
-  const flattenData = data.reduce((result, entry) => {
-    const value = getValueByDataKey(entry, key);
-
-    if (_.isArray(value)) {
-      return [...result, ...value];
-    }
-
-    return [...result, value];
-  }, []);
+  const flattenData = _.flatMap(data, entry => getValueByDataKey(entry, key));
 
   if (type === 'number') {
-    const domain = flattenData.filter(isNumber);
+    const domain = flattenData.filter(entry => isNumber(entry) || parseFloat(entry, 10));
 
     return [Math.min.apply(null, domain), Math.max.apply(null, domain)];
   }
@@ -54,18 +46,67 @@ export const getDomainOfDataByKey = (data, key, type, filterNil) => {
   return validateData.map(entry => (isNumOrStr(entry) ? entry : ''));
 };
 
-export const calculateActiveTickIndex = (coordinate, ticks) => {
+export const calculateActiveTickIndex = (coordinate, ticks, unsortedTicks, axis) => {
   let index = -1;
   const len = ticks.length;
 
   if (len > 1) {
-    for (let i = 0; i < len; i++) {
-      if ((i === 0 && coordinate <= (ticks[i].coordinate + ticks[i + 1].coordinate) / 2)
-        || (i > 0 && i < len - 1 && coordinate > (ticks[i].coordinate + ticks[i - 1].coordinate) / 2
-          && coordinate <= (ticks[i].coordinate + ticks[i + 1].coordinate) / 2)
-        || (i === len - 1 && coordinate > (ticks[i].coordinate + ticks[i - 1].coordinate) / 2)) {
-        index = ticks[i].index;
-        break;
+    if (axis && axis.axisType === 'angleAxis' &&
+      Math.abs(Math.abs(axis.range[1] - axis.range[0]) - 360) <= 1e-6) {
+      const { range } = axis;
+      // ticks are distributed in a circle
+      for (let i = 0; i < len; i++) {
+        const before = i > 0 ? unsortedTicks[i - 1].coordinate : unsortedTicks[len - 1].coordinate;
+        const cur = unsortedTicks[i].coordinate;
+        const after = i >= len - 1 ? unsortedTicks[0].coordinate : unsortedTicks[i + 1].coordinate;
+        let sameDirectionCoord;
+
+        if (mathSign(cur - before) !== mathSign(after - cur)) {
+          const diffInterval = [];
+          if (mathSign(after - cur) === mathSign(range[1] - range[0])) {
+            sameDirectionCoord = after;
+
+            const curInRange = cur + range[1] - range[0];
+            diffInterval[0] = Math.min(curInRange, (curInRange + before) / 2);
+            diffInterval[1] = Math.max(curInRange, (curInRange + before) / 2);
+          } else {
+            sameDirectionCoord = before;
+
+            const afterInRange = after + range[1] - range[0];
+            diffInterval[0] = Math.min(cur, (afterInRange + cur) / 2);
+            diffInterval[1] = Math.max(cur, (afterInRange + cur) / 2);
+          }
+          const sameInterval = [
+            Math.min(cur, (sameDirectionCoord + cur) / 2),
+            Math.max(cur, (sameDirectionCoord + cur) / 2),
+          ];
+
+          if ((coordinate > sameInterval[0] && coordinate <= sameInterval[1]) || (
+            coordinate >= diffInterval[0] && coordinate <= diffInterval[1]
+          )) {
+            ({ index } = unsortedTicks[i]);
+            break;
+          }
+        } else {
+          const min = Math.min(before, after);
+          const max = Math.max(before, after);
+
+          if (coordinate > (min + cur) / 2 && coordinate <= (max + cur) / 2) {
+            ({ index } = unsortedTicks[i]);
+            break;
+          }
+        }
+      }
+    } else {
+      // ticks are distributed in a single direction
+      for (let i = 0; i < len; i++) {
+        if ((i === 0 && coordinate <= (ticks[i].coordinate + ticks[i + 1].coordinate) / 2) ||
+          (i > 0 && i < len - 1 && coordinate > (ticks[i].coordinate + ticks[i - 1].coordinate) / 2 &&
+            coordinate <= (ticks[i].coordinate + ticks[i + 1].coordinate) / 2) ||
+          (i === len - 1 && coordinate > (ticks[i].coordinate + ticks[i - 1].coordinate) / 2)) {
+          ({ index } = ticks[i]);
+          break;
+        }
       }
     }
   } else {
@@ -81,7 +122,7 @@ export const calculateActiveTickIndex = (coordinate, ticks) => {
  * @return {String}            Color
  */
 export const getMainColorOfGraphicItem = (item) => {
-  const displayName = item.type.displayName;
+  const { type: { displayName } } = item;
   let result;
 
   switch (displayName) {
@@ -99,7 +140,7 @@ export const getMainColorOfGraphicItem = (item) => {
 };
 
 export const getLegendProps = ({
-  children, formatedGraphicalItems, legendWidth, legendHeight, legendContent,
+  children, formatedGraphicalItems, legendWidth, legendContent,
 }) => {
   const legendItem = findChildByType(children, Legend);
   if (!legendItem) { return null; }
@@ -108,8 +149,7 @@ export const getLegendProps = ({
   if (legendItem.props && legendItem.props.payload) {
     legendData = (legendItem.props && legendItem.props.payload);
   } else if (legendContent === 'children') {
-    legendData = (formatedGraphicalItems || []).reduce((result, { item, props }, i) => {
-      const { nameKey } = item.props;
+    legendData = (formatedGraphicalItems || []).reduce((result, { item, props }) => {
       const data = props.sectors || props.data || [];
 
       return result.concat(data.map(entry => (
@@ -122,7 +162,7 @@ export const getLegendProps = ({
       )));
     }, []);
   } else {
-    legendData = (formatedGraphicalItems || []).map(({ item, props }) => {
+    legendData = (formatedGraphicalItems || []).map(({ item }) => {
       const { dataKey, name, legendType, hide } = item.props;
 
       return {
@@ -141,6 +181,7 @@ export const getLegendProps = ({
     ...legendItem.props,
     ...Legend.getWithHeight(legendItem, legendWidth),
     payload: legendData,
+    item: legendItem,
   };
 };
 /**
@@ -354,7 +395,7 @@ export const parseErrorBarsOfAxis = (data, items, dataKey, axisType) => {
  */
 export const getDomainOfItemsWithSameAxis = (data, items, type, filterNil) => {
   const domains = items.map((item) => {
-    const { children, dataKey } = item.props;
+    const { dataKey } = item.props;
 
     if (type === 'number' && dataKey) {
       return getDomainOfErrorBars(data, item, dataKey) ||
@@ -391,7 +432,8 @@ export const isCategorialAxis = (layout, axisType) => (
   (layout === 'centric' && axisType === 'angleAxis') ||
   (layout === 'radial' && axisType === 'radiusAxis')
 );
- /**
+
+/**
  * Calculate the Coordinates of grid
  * @param  {Array} ticks The ticks in axis
  * @param {Number} min   The minimun value of axis
@@ -423,11 +465,11 @@ export const getCoordinatesOfGrid = (ticks, min, max) => {
  */
 export const getTicksOfAxis = (axis, isGrid, isAll) => {
   if (!axis) return null;
-  const scale = axis.scale;
-  const { duplicateDomain, type } = axis;
-  const offset = ((isGrid || isAll) && type === 'category' && scale.bandwidth &&
-    axis.axisType !== 'angleAxis') ?
+  const { scale } = axis;
+  const { duplicateDomain, type, range } = axis;
+  let offset = ((isGrid || isAll) && type === 'category' && scale.bandwidth) ?
     scale.bandwidth() / 2 : 0;
+  offset = axis.axisType === 'angleAxis' ? mathSign(range[0] - range[1]) * 2 * offset : offset;
 
   // The ticks setted by user should only affect the ticks adjacent to axis line
   if (isGrid && (axis.ticks || axis.niceTicks)) {
@@ -460,14 +502,12 @@ export const getTicksOfAxis = (axis, isGrid, isAll) => {
   }
 
   // When axis has duplicated text, serial numbers are used to generate scale
-  return scale.domain().map((entry, index) => (
-    {
-      coordinate: scale(entry) + offset,
-      value: duplicateDomain ? duplicateDomain[entry] : entry,
-      index,
-      offset,
-    }
-  ));
+  return scale.domain().map((entry, index) => ({
+    coordinate: scale(entry) + offset,
+    value: duplicateDomain ? duplicateDomain[entry] : entry,
+    index,
+    offset,
+  }));
 };
 
 /**
@@ -491,10 +531,10 @@ export const combineEventHandlers = (defaultHandler, parentHandler, childHandler
       if (_.isFunction(defaultHandler)) {
         defaultHandler(arg1, arg2, arg3, arg4);
       }
-
       if (_.isFunction(customizedHandler)) {
         customizedHandler(arg1, arg2, arg3, arg4);
       }
+
     };
   }
 
@@ -511,19 +551,19 @@ export const parseScale = (axis, chartType) => {
   if (scale === 'auto') {
     if (layout === 'radial' && axisType === 'radiusAxis') {
       return { scale: d3Scales.scaleBand(), realScaleType: 'band' };
-    } else if (layout === 'radial' && axisType === 'angleAxis') {
+    } if (layout === 'radial' && axisType === 'angleAxis') {
       return { scale: d3Scales.scaleLinear(), realScaleType: 'linear' };
     }
 
     if (type === 'category' && chartType && (chartType.indexOf('LineChart') >= 0 ||
       chartType.indexOf('AreaChart') >= 0)) {
       return { scale: d3Scales.scalePoint(), realScaleType: 'point' };
-    } else if (type === 'category') {
+    } if (type === 'category') {
       return { scale: d3Scales.scaleBand(), realScaleType: 'band' };
     }
 
     return { scale: d3Scales.scaleLinear(), realScaleType: 'linear' };
-  } else if (_.isString(scale)) {
+  } if (_.isString(scale)) {
     const name = `scale${scale.slice(0, 1).toUpperCase()}${scale.slice(1)}`;
 
     return {
@@ -601,8 +641,9 @@ export const offsetSign = (series) => {
     let negative = 0;
 
     for (let i = 0; i < n; ++i) {
-      const value = isNaN(series[i][j][1]) ? series[i][j][0] : series[i][j][1];
+      const value = _.isNaN(series[i][j][1]) ? series[i][j][0] : series[i][j][1];
 
+      /* eslint-disable prefer-destructuring */
       if (value >= 0) {
         series[i][j][0] = positive;
         series[i][j][1] = positive + value;
@@ -612,6 +653,7 @@ export const offsetSign = (series) => {
         series[i][j][1] = negative + value;
         negative = series[i][j][1];
       }
+      /* eslint-enable prefer-destructuring */
     }
   }
 };
@@ -627,16 +669,21 @@ const STACK_OFFSET_MAP = {
 export const getStackedData = (data, stackItems, offsetType) => {
   const dataKeys = stackItems.map(item => item.props.dataKey);
   const stack = shapeStack()
-                .keys(dataKeys)
-                .value((d, key) => +getValueByDataKey(d, key, 0))
-                .order(stackOrderNone)
-                .offset(STACK_OFFSET_MAP[offsetType]);
+    .keys(dataKeys)
+    .value((d, key) => +getValueByDataKey(d, key, 0))
+    .order(stackOrderNone)
+    .offset(STACK_OFFSET_MAP[offsetType]);
 
   return stack(data);
 };
 
-export const getStackGroupsByAxisId = (data, items, numericAxisId, cateAxisId, offsetType) => {
+export const getStackGroupsByAxisId = (
+  data, _items, numericAxisId, cateAxisId, offsetType, reverseStackOrder
+) => {
   if (!data) { return null; }
+
+  // reversing items to affect render order (for layering)
+  const items = reverseStackOrder ? _items.reverse() : _items;
 
   const stackGroups = items.reduce((result, item) => {
     const { stackId, hide } = item.props;
@@ -725,7 +772,7 @@ export const getTicksOfScale = (scale, opts) => {
     scale.domain(calculateDomainOfTicks(tickValues, type));
 
     return { niceTicks: tickValues };
-  } else if (tickCount && type === 'number') {
+  } if (tickCount && type === 'number') {
     const domain = scale.domain();
     const tickValues = getTickValuesFixedDomain(domain, tickCount, allowDecimals);
 
@@ -737,6 +784,15 @@ export const getTicksOfScale = (scale, opts) => {
 
 export const getCateCoordinateOfLine = ({ axis, ticks, bandSize, entry, index }) => {
   if (axis.type === 'category') {
+    // find coordinate of category axis by the value of category
+    if (!axis.allowDuplicatedCategory && axis.dataKey && !_.isNil(entry[axis.dataKey])) {
+      const matchedTick = findEntryInArray(ticks, 'value', entry[axis.dataKey]);
+
+      if (matchedTick) {
+        return matchedTick.coordinate + bandSize / 2;
+      }
+    }
+
     return ticks[index] ? ticks[index].coordinate + bandSize / 2 : null;
   }
 
@@ -771,7 +827,20 @@ export const getBaseValueOfBar = ({ numericAxis }) => {
   return domain[0];
 };
 
-export const detectReferenceElementsDomain = (children, domain, axisId, axisType) => {
+export const ifOverflowMatches = (props, value) => {
+  const { alwaysShow } = props;
+  let { ifOverflow } = props;
+
+  if (alwaysShow) {
+    ifOverflow = 'extendDomain';
+  }
+
+  return ifOverflow === value;
+};
+
+export const detectReferenceElementsDomain = (
+  children, domain, axisId, axisType, specifiedTicks
+) => {
   const lines = findAllByType(children, ReferenceLine);
   const dots = findAllByType(children, ReferenceDot);
   const elements = lines.concat(dots);
@@ -782,7 +851,8 @@ export const detectReferenceElementsDomain = (children, domain, axisId, axisType
 
   if (elements.length) {
     finalDomain = elements.reduce((result, el) => {
-      if (el.props[idKey] === axisId && el.props.alwaysShow &&
+      if (el.props[idKey] === axisId &&
+        ifOverflowMatches(el.props, 'extendDomain') &&
         isNumber(el.props[valueKey])) {
         const value = el.props[valueKey];
 
@@ -797,13 +867,24 @@ export const detectReferenceElementsDomain = (children, domain, axisId, axisType
     const key2 = `${valueKey}2`;
 
     finalDomain = areas.reduce((result, el) => {
-      if (el.props[idKey] === axisId && el.props.alwaysShow &&
+      if (el.props[idKey] === axisId &&
+        ifOverflowMatches(el.props, 'extendDomain') &&
         (isNumber(el.props[key1]) && isNumber(el.props[key2]))) {
         const value1 = el.props[key1];
         const value2 = el.props[key2];
 
         return [Math.min(result[0], value1, value2), Math.max(result[1], value1, value2)];
       }
+      return result;
+    }, finalDomain);
+  }
+
+  if (specifiedTicks && specifiedTicks.length) {
+    finalDomain = specifiedTicks.reduce((result, tick) => {
+      if (isNumber(tick)) {
+        return [Math.min(result[0], tick), Math.max(result[1], tick)];
+      }
+
       return result;
     }, finalDomain);
   }
@@ -866,6 +947,7 @@ export const parseSpecifiedDomain = (specifiedDomain, dataDomain, allowDataOverf
 
   const domain = [];
 
+  /* eslint-disable prefer-destructuring */
   if (isNumber(specifiedDomain[0])) {
     domain[0] = allowDataOverflow ?
       specifiedDomain[0] : Math.min(specifiedDomain[0], dataDomain[0]);
@@ -873,6 +955,8 @@ export const parseSpecifiedDomain = (specifiedDomain, dataDomain, allowDataOverf
     const value = +MIN_VALUE_REG.exec(specifiedDomain[0])[1];
 
     domain[0] = dataDomain[0] - value;
+  } else if (_.isFunction(specifiedDomain[0])) {
+    domain[0] = specifiedDomain[0](dataDomain[0]);
   } else {
     domain[0] = dataDomain[0];
   }
@@ -884,24 +968,14 @@ export const parseSpecifiedDomain = (specifiedDomain, dataDomain, allowDataOverf
     const value = +MAX_VALUE_REG.exec(specifiedDomain[1])[1];
 
     domain[1] = dataDomain[1] + value;
+  } else if (_.isFunction(specifiedDomain[1])) {
+    domain[1] = specifiedDomain[1](dataDomain[1]);
   } else {
     domain[1] = dataDomain[1];
   }
+  /* eslint-enable prefer-destructuring */
 
   return domain;
-};
-
-export const validateCoordinateInRange = (coordinate, scale) => {
-  if (!scale) { return false; }
-
-  const range = scale.range();
-  const first = range[0];
-  const last = range[range.length - 1];
-  const isValidate = first <= last ?
-    (coordinate >= first && coordinate <= last) :
-    (coordinate >= last && coordinate <= first);
-
-  return isValidate;
 };
 
 /**
@@ -931,4 +1005,21 @@ export const getBandSizeOfAxis = (axis, ticks) => {
 
   return 0;
 };
+/**
+ * parse the domain of a category axis when a domain is specified
+ * @param   {Array}        specifiedDomain  The domain specified by users
+ * @param   {Array}        calculatedDomain The domain calculated by dateKey
+ * @param   {ReactElement} axisChild        The axis element
+ * @returns {Array}        domains
+ */
+export const parseDomainOfCategoryAxis = (specifiedDomain, calculatedDomain, axisChild) => {
+  if (!specifiedDomain || !specifiedDomain.length) {
+    return calculatedDomain;
+  }
 
+  if (_.isEqual(specifiedDomain, _.get(axisChild, 'type.defaultProps.domain'))) {
+    return calculatedDomain;
+  }
+
+  return specifiedDomain;
+};

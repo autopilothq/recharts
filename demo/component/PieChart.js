@@ -1,7 +1,8 @@
 import React, { Component } from 'react';
 import { PieChart, Pie, Legend, Cell, Tooltip, ResponsiveContainer, Sector,
   Label, LabelList } from 'recharts';
-import { scaleOrdinal, schemeCategory10 } from 'd3-scale';
+import { scaleOrdinal } from 'd3-scale';
+import { schemeCategory10 } from 'd3-scale-chromatic';
 import { changeNumberOfData } from './utils';
 
 const colors = scaleOrdinal(schemeCategory10).range();
@@ -44,7 +45,7 @@ const data03 = [
   { name: 'F3', value: 51 },
 ];
 
-const initilaState = { data01, data02, data03 };
+const initialState = { data01, data02, data03 };
 
 const renderLabelContent = (props) => {
   const { value, percent, x, y, midAngle } = props;
@@ -114,17 +115,27 @@ export default class Demo extends Component {
   };
 
   state = {
-    ...initilaState,
+    ...initialState,
     activeIndex: 0,
+    animation: false,
   };
 
   handleChangeData = () => {
-    this.setState(() => _.mapValues(initilaState, changeNumberOfData));
+    this.setState(() => _.mapValues(initialState, changeNumberOfData));
+  };
+
+  handleChangeAnimation = () => {
+    this.setState({
+      animation: !this.state.animation,
+    });
   };
 
   handlePieChartEnter = (a, b, c) => {
     console.log(a, b, c);
   };
+
+  handleEnter = (e, activeIndex) => this.setState({ activeIndex });
+  handleLeave = () => this.setState({ activeIndex: -1 });
 
   render () {
     const { data01, data02, data03 } = this.state;
@@ -141,6 +152,7 @@ export default class Demo extends Component {
         <br/>
         <p>Simple PieChart</p>
         <div className="pie-chart-wrapper">
+          <button onClick={this.handleChangeAnimation}>change animation</button>
           <PieChart width={800} height={400}>
             <Legend />
             <Pie
@@ -172,6 +184,7 @@ export default class Demo extends Component {
               outerRadius={80}
               label={renderLabelContent}
               paddingAngle={5}
+              isAnimationActive={this.state.animation}
             >
               {
                 data02.map((entry, index) => (
@@ -223,6 +236,34 @@ export default class Demo extends Component {
                 {
                   data01.map((entry, index) => (
                     <Cell key={`slice-${index}`} fill={colors[index % 10]}/>
+                  ))
+                }
+                <Label value="test" />
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <p>PieChart has bug about tooltip</p>
+        <div className="pie-chart-wrapper" style={{ width: '50%', height: '100%', backgroundColor: '#f5f5f5' }}>
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={data01}
+                dataKey="value"
+                innerRadius="25%"
+                outerRadius="40%"
+                onMouseEnter={this.handleEnter}
+                onMouseLeave={this.handleLeave}
+              >
+                <Tooltip />
+                {
+                  data01.map((entry, index) => (
+                    <Cell
+                      key={`slice-${index}`}
+                      fill={colors[index % 10]}
+                      fillOpacity={this.state.activeIndex === index ? 1 : 0.25}
+                    />
                   ))
                 }
                 <Label value="test" />

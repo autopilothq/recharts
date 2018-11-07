@@ -1,17 +1,20 @@
 import { expect } from 'chai';
 import { scaleLinear, scaleBand } from 'd3-scale';
 import {
-  calculateActiveTickIndex, getDomainOfStackGroups,
-  getDomainOfDataByKey, appendOffsetOfLegend,
-  validateCoordinateInRange, getBandSizeOfAxis, calculateDomainOfTicks,
-  parseSpecifiedDomain,  parseScale, getTicksOfScale, getValueByDataKey,
-  offsetSign, MIN_VALUE_REG, MAX_VALUE_REG } from '../../../src/util/ChartUtils';
-
-describe('validateCoordinateInRange', () => {
-  it('DataUtils.validateCoordinateInRange(1) should return false ', () => {
-    expect(validateCoordinateInRange(1)).to.equal(false);
-  });
-});
+  calculateActiveTickIndex,
+  getDomainOfStackGroups,
+  getDomainOfDataByKey,
+  appendOffsetOfLegend,
+  getBandSizeOfAxis,
+  calculateDomainOfTicks,
+  parseSpecifiedDomain,
+  parseScale,
+  getTicksOfScale,
+  getValueByDataKey,
+  offsetSign,
+  MIN_VALUE_REG,
+  MAX_VALUE_REG
+} from '../../../src/util/ChartUtils';
 
 describe('getBandSizeOfAxis', () => {
   it('DataUtils.getBandSizeOfAxis() should return 0 ', () => {
@@ -19,7 +22,12 @@ describe('getBandSizeOfAxis', () => {
   });
 
   it('DataUtils.getBandSizeOfAxis({ type: "category", scale }) should return 0 ', () => {
-    const axis = { type: 'category', scale: scaleBand().domain([0, 1, 2, 3]).range([0, 100]) };
+    const axis = {
+      type: 'category',
+      scale: scaleBand()
+        .domain([0, 1, 2, 3])
+        .range([0, 100])
+    };
     expect(getBandSizeOfAxis(axis)).to.equal(25);
   });
 
@@ -29,7 +37,6 @@ describe('getBandSizeOfAxis', () => {
     expect(getBandSizeOfAxis(axis, ticks)).to.equal(2);
   });
 });
-
 
 describe('parseSpecifiedDomain', () => {
   const domain = [20, 100];
@@ -51,8 +58,15 @@ describe('parseSpecifiedDomain', () => {
     const result = parseSpecifiedDomain(['dataMin - 10', 'dataMax + 10'], domain);
     expect(result).to.deep.equal([10, 110]);
   });
-});
 
+  it('DataUtils.parseSpecifiedDomain([dataMin => (0 - Math.abs(dataMin)), dataMax => (dataMax * 2)], domain) should return [-20, 200] ', () => {
+    const result = parseSpecifiedDomain(
+      [dataMin => 0 - Math.abs(dataMin), dataMax => dataMax * 2],
+      domain
+    );
+    expect(result).to.deep.equal([-20, 200]);
+  });
+});
 
 describe('parseScale', () => {
   it('of "time" ', () => {
@@ -70,7 +84,7 @@ describe('getValueByDataKey', () => {
   const data = { a: 1, b: 2, c: 3 };
 
   it('of function', () => {
-    const fn = (entry) => entry.a;
+    const fn = entry => entry.a;
 
     expect(getValueByDataKey(data, fn)).to.equal(1);
   });
@@ -80,13 +94,9 @@ describe('getValueByDataKey', () => {
   });
 });
 
-
 describe('offsetSign', () => {
   describe('of data', () => {
-    const data = [
-      [[0, 1], [0, 2], [0, -5]],
-      [[0, -1], [0, 2], [0, -5]],
-    ];
+    const data = [[[0, 1], [0, 2], [0, -5]], [[0, -1], [0, 2], [0, -5]]];
     const offsetData = offsetSign(data);
 
     it('should change', () => {
@@ -103,7 +113,7 @@ describe('getTicksOfScale', () => {
       type: 'number',
       tickCount: 5,
       originalDomain: ['auto', 'auto'],
-      allowDecimals: true,
+      allowDecimals: true
     };
     const result = getTicksOfScale(scale, opts);
 
@@ -117,7 +127,7 @@ describe('getTicksOfScale', () => {
       type: 'number',
       tickCount: 5,
       originalDomain: [0, 100],
-      allowDecimals: true,
+      allowDecimals: true
     };
     const result = getTicksOfScale(scale, opts);
 
@@ -139,14 +149,12 @@ describe('calculateDomainOfTicks', () => {
   });
 });
 
-
-
 describe('calculateActiveTickIndex', () => {
   const ticks = [
     { coordinate: 0, index: 0 },
     { coordinate: 12, index: 1 },
     { coordinate: 14, index: 2 },
-    { coordinate: 15, index: 3 },
+    { coordinate: 15, index: 3 }
   ];
   it('calculateActiveTickIndex(12, ticks) should return 1', () => {
     expect(calculateActiveTickIndex(12, ticks)).to.equal(1);
@@ -167,11 +175,11 @@ describe('getDomainOfStackGroups', () => {
   before(() => {
     stackData = {
       a: {
-        stackedData: [[[10, 14], [12, 16]], [[8, 14], [34, 11]]],
+        stackedData: [[[10, 14], [12, 16]], [[8, 14], [34, 11]]]
       },
       b: {
-        stackedData: [[[9, 13], [11, 15]], [[12, 14], [25, 22]]],
-      },
+        stackedData: [[[9, 13], [11, 15]], [[12, 14], [25, 22]]]
+      }
     };
   });
 
@@ -187,7 +195,7 @@ describe('getDomainOfStackGroups', () => {
 
   it('domain of all nulls should return [0, 0]', () => {
     stackData = {
-      a: { stackedData: [[[null, null]]] },
+      a: { stackedData: [[[null, null]]] }
     };
 
     expect(getDomainOfStackGroups(stackData, 0, 1)).to.deep.equal([0, 0]);
@@ -227,25 +235,35 @@ describe('getDomainOfDataByKey', () => {
     const data = [
       {
         x: 1,
+        y: 4,
         actual: 35.4,
-        benchmark: 35.4,
-      }, {
-        x: 2,
-        actual: 40,
-      }, {
-        x: 3,
-        actual: 40.7,
-      }, {
-        x: 4,
-        actual: 42.5,
-      }, {
-        x: 5,
-        benchmark: 31.86,
+        benchmark: 35.4
       },
+      {
+        x: 2,
+        y: 3,
+        actual: 40
+      },
+      {
+        x: 3,
+        y: 2,
+        actual: 40.7
+      },
+      {
+        x: 4,
+        y: 1,
+        actual: 42.5
+      },
+      {
+        x: 5,
+        y: 0,
+        benchmark: 31.86
+      }
     ];
 
     it('should calculate the correct domain for a simple linear set', () => {
       expect(getDomainOfDataByKey(data, 'x', 'number')).to.deep.equal([1, 5]);
+      expect(getDomainOfDataByKey(data, 'y', 'number')).to.deep.equal([0, 4]);
     });
 
     it('should calculate the correct domain even if there is no data for certain items in the set', () => {

@@ -47,7 +47,7 @@ export const getPercentValue = (percent, totalValue, defaultValue = 0, validate 
     value = +percent;
   }
 
-  if (isNaN(value)) {
+  if (_.isNaN(value)) {
     value = defaultValue;
   }
 
@@ -93,4 +93,46 @@ export const interpolateNumber = (numberA, numberB) => {
   }
 
   return () => numberB;
+};
+
+export const findEntryInArray = (ary, specifiedKey, specifiedValue) => {
+  if (!ary || !ary.length) { return null; }
+
+  return ary.find(entry => (entry && _.get(entry, specifiedKey) === specifiedValue));
+};
+
+/**
+ * The least square linear regression
+ * @param {Array} data The array of points
+ * @returns {Object} The domain of x, and the parameter of linear function
+ */
+export const getLinearRegression = (data) => {
+  if (!data || !data.length) { return null; }
+
+  const len = data.length;
+  let xsum = 0;
+  let ysum = 0;
+  let xysum = 0;
+  let xxsum = 0;
+  let xmin = Infinity;
+  let xmax = -Infinity;
+
+  for (let i = 0; i < len; i++) {
+    xsum += data[i].cx;
+    ysum += data[i].cy;
+    xysum += data[i].cx * data[i].cy;
+    xxsum += data[i].cx * data[i].cx;
+    xmin = Math.min(xmin, data[i].cx);
+    xmax = Math.max(xmax, data[i].cx);
+  }
+
+  const a = len * xxsum !== xsum * xsum ?
+    ((len * xysum - xsum * ysum) / (len * xxsum - xsum * xsum)) : 0;
+
+  return {
+    xmin,
+    xmax,
+    a,
+    b: (ysum - a * xsum) / len,
+  };
 };

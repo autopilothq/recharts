@@ -68,7 +68,7 @@ const searchTargetsAndSources = (links, id) => {
 };
 
 const updateDepthOfTargets = (tree, curNode) => {
-  const targetNodes = curNode.targetNodes;
+  const { targetNodes } = curNode;
 
   for (let i = 0, len = targetNodes.length; i < len; i++) {
     const target = tree[targetNodes[i]];
@@ -366,7 +366,7 @@ class Sankey extends Component {
   constructor(props) {
     super(props);
 
-    this.state = this.createDefaultState(props);
+    this.state = this.constructor.createDefaultState(props);
   }
 
   componentWillReceiveProps(nextProps) {
@@ -375,15 +375,16 @@ class Sankey extends Component {
       nextProps.height !== height || !shallowEqual(nextProps.margin, margin) ||
       nextProps.iterations !== iterations || nextProps.nodeWidth !== nodeWidth ||
       nextProps.nodePadding !== nodePadding || nextProps.nameKey !== nameKey) {
-      this.setState(this.createDefaultState(this.props));
+      this.setState(this.constructor.createDefaultState(nextProps));
     }
   }
+
   /**
    * Returns default, reset state for the sankey chart.
    * @param  {Object} props The latest props
    * @return {Object} Whole new state
    */
-  createDefaultState(props) {
+  static createDefaultState(props) {
     const { data, width, height, margin, iterations, nodeWidth, nodePadding } = props;
     const contentWidth = width - ((margin && margin.left) || 0) - ((margin && margin.right) || 0);
     const contentHeight = height - ((margin && margin.top) || 0) - ((margin && margin.bottom) || 0);
@@ -438,10 +439,10 @@ class Sankey extends Component {
     }
   }
 
-  renderLinkItem(option, props) {
+  static renderLinkItem(option, props) {
     if (React.isValidElement(option)) {
       return React.cloneElement(option, props);
-    } else if (_.isFunction(option)) {
+    } if (_.isFunction(option)) {
       return option(props);
     }
 
@@ -501,7 +502,7 @@ class Sankey extends Component {
 
             return (
               <Layer key={`link${i}`} {...events}>
-                {this.renderLinkItem(linkContent, linkProps)}
+                {this.constructor.renderLinkItem(linkContent, linkProps)}
               </Layer>
             );
           })
@@ -510,10 +511,10 @@ class Sankey extends Component {
     );
   }
 
-  renderNodeItem(option, props) {
+  static renderNodeItem(option, props) {
     if (React.isValidElement(option)) {
       return React.cloneElement(option, props);
-    } else if (_.isFunction(option)) {
+    } if (_.isFunction(option)) {
       return option(props);
     }
 
@@ -553,7 +554,7 @@ class Sankey extends Component {
 
             return (
               <Layer key={`node${i}`} {...events}>
-                {this.renderNodeItem(nodeContent, nodeProps)}
+                {this.constructor.renderNodeItem(nodeContent, nodeProps)}
               </Layer>
             );
           })

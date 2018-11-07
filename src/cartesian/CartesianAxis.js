@@ -40,6 +40,7 @@ class CartesianAxis extends Component {
     axisLine: PropTypes.oneOfType([PropTypes.bool, PropTypes.object]),
     tickLine: PropTypes.oneOfType([PropTypes.bool, PropTypes.object]),
     mirror: PropTypes.bool,
+    tickMargin: PropTypes.number.isRequired,
 
     minTickGap: PropTypes.number,
     ticks: PropTypes.array,
@@ -72,6 +73,7 @@ class CartesianAxis extends Component {
     minTickGap: 5,
     // The width or height of tick
     tickSize: 6,
+    tickMargin: 2,
     interval: 'preserveEnd',
   };
 
@@ -88,7 +90,7 @@ class CartesianAxis extends Component {
       return CartesianAxis.getTicksStart({
         ticks, tickFormatter, viewBox, orientation, minTickGap, unit,
       }, true);
-    } else if (interval === 'preserveStart') {
+    } if (interval === 'preserveStart') {
       return CartesianAxis.getTicksStart({
         ticks, tickFormatter, viewBox, orientation, minTickGap, unit,
       });
@@ -231,7 +233,7 @@ class CartesianAxis extends Component {
    *  (x2, y2): The coordinate of endpoint close to axis
    */
   getTickLineCoord(data) {
-    const { x, y, width, height, orientation, tickSize, mirror } = this.props;
+    const { x, y, width, height, orientation, tickSize, mirror, tickMargin } = this.props;
     let x1, x2, y1, y2, tx, ty;
 
     const sign = mirror ? -1 : 1;
@@ -242,25 +244,29 @@ class CartesianAxis extends Component {
       case 'top':
         x1 = x2 = data.coordinate;
         y2 = y + (!mirror) * height;
-        y1 = ty = y2 - sign * finalTickSize;
+        y1 = y2 - sign * finalTickSize;
+        ty = y1 - sign * tickMargin;
         tx = tickCoord;
         break;
       case 'left':
         y1 = y2 = data.coordinate;
         x2 = x + (!mirror) * width;
-        x1 = tx = x2 - sign * finalTickSize;
+        x1 = x2 - sign * finalTickSize;
+        tx = x1 - sign * tickMargin;
         ty = tickCoord;
         break;
       case 'right':
         y1 = y2 = data.coordinate;
         x2 = x + mirror * width;
-        x1 = tx = x2 + sign * finalTickSize;
+        x1 = x2 + sign * finalTickSize;
+        tx = x1 + sign * tickMargin;
         ty = tickCoord;
         break;
       default:
         x1 = x2 = data.coordinate;
         y2 = y + mirror * height;
-        y1 = ty = y2 + sign * finalTickSize;
+        y1 = y2 + sign * finalTickSize;
+        ty = y1 + sign * tickMargin;
         tx = tickCoord;
         break;
     }
@@ -338,7 +344,7 @@ class CartesianAxis extends Component {
     return <line className="recharts-cartesian-axis-line" {...props} />;
   }
 
-  renderTickItem(option, props, value) {
+  static renderTickItem(option, props, value) {
     let tickItem;
 
     if (React.isValidElement(option)) {
@@ -384,6 +390,7 @@ class CartesianAxis extends Component {
         ...customTickProps,
         ...tickCoord,
         index: i, payload: entry,
+        visibleTicksCount: finalTicks.length,
       };
 
       return (
@@ -399,7 +406,7 @@ class CartesianAxis extends Component {
               {...lineCoord}
             />
           )}
-          {tick && this.renderTickItem(
+          {tick && this.constructor.renderTickItem(
             tick,
             tickProps,
             `${_.isFunction(tickFormatter) ? tickFormatter(entry.value) : entry.value}${unit || ''}`

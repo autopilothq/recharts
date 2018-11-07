@@ -8,6 +8,7 @@ import classNames from 'classnames';
 import _ from 'lodash';
 import pureRender from '../util/PureRender';
 import Layer from '../container/Layer';
+import LabelList from '../component/LabelList';
 import { PRESENTATION_ATTRIBUTES, EVENT_ATTRIBUTES, LEGEND_TYPES,
   getPresentationAttributes, filterEventsOfChild, isSsr, findAllByType } from '../util/ReactUtils';
 import ZAxis from './ZAxis';
@@ -15,8 +16,8 @@ import Curve from '../shape/Curve';
 import Symbols from '../shape/Symbols';
 import ErrorBar from './ErrorBar';
 import Cell from '../component/Cell';
-import { uniqueId, isNumOrStr, interpolateNumber } from '../util/DataUtils';
-import { getValueByDataKey } from '../util/ChartUtils';
+import { uniqueId, interpolateNumber, getLinearRegression } from '../util/DataUtils';
+import { getValueByDataKey, getCateCoordinateOfLine } from '../util/ChartUtils';
 
 @pureRender
 class Scatter extends Component {
@@ -40,6 +41,7 @@ class Scatter extends Component {
     ]), PropTypes.func]),
     legendType: PropTypes.oneOf(LEGEND_TYPES),
     className: PropTypes.string,
+    name: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
 
     activeIndex: PropTypes.number,
     activeShape: PropTypes.oneOfType([
@@ -95,15 +97,15 @@ class Scatter extends Component {
    * @return {Array}  Composed data
    */
   static getComposedData = ({ xAxis, yAxis, zAxis, item, displayedData, onItemMouseLeave,
-    onItemMouseEnter, offset }) => {
+    onItemMouseEnter, offset, xAxisTicks }) => {
     const cells = findAllByType(item.props.children, Cell);
     const xAxisDataKey = _.isNil(xAxis.dataKey) ? item.props.dataKey : xAxis.dataKey;
     const yAxisDataKey = _.isNil(yAxis.dataKey) ? item.props.dataKey : yAxis.dataKey;
     const zAxisDataKey = zAxis && zAxis.dataKey;
     const defaultRangeZ = zAxis ? zAxis.range : ZAxis.defaultProps.range;
     const defaultZ = defaultRangeZ && defaultRangeZ[0];
-    const xOffset = xAxis.scale.bandwidth ? xAxis.scale.bandwidth() / 2 : 0;
-    const yOffset = yAxis.scale.bandwidth ? yAxis.scale.bandwidth() / 2 : 0;
+    const xBandSize = xAxis.scale.bandwidth ? xAxis.scale.bandwidth() : 0;
+    const yBandSize = yAxis.scale.bandwidth ? yAxis.scale.bandwidth() : 0;
     const points = displayedData.map((entry, index) => {
       const x = entry[xAxisDataKey];
       const y = entry[yAxisDataKey];
@@ -118,11 +120,23 @@ class Scatter extends Component {
           name: zAxis.name || zAxis.dataKey, unit: zAxis.unit || '', value: z, payload: entry,
         });
       }
-      const cx = isNumOrStr(x) ? xAxis.scale(x) + xOffset : null;
-      const cy = isNumOrStr(y) ? yAxis.scale(y) + yOffset : null;
+      const cx = getCateCoordinateOfLine({
+        axis: xAxis, ticks: xAxisTicks, bandSize: xBandSize, entry, index,
+      });
+      const cy = getCateCoordinateOfLine({
+        axis: yAxis, ticks: xAxisTicks, bandSize: yBandSize, entry, index,
+      });
+      const size = z !== '-' ? zAxis.scale(z) : defaultZ;
+      const radius = Math.sqrt(Math.max(size, 0) / Math.PI);
+
       return {
         ...entry, cx, cy,
-        size: z !== '-' ? zAxis.scale(z) : defaultZ,
+        x: cx - radius,
+        y: cy - radius,
+        xAxis, yAxis, zAxis,
+        width: 2 * radius,
+        height: 2 * radius,
+        size,
         node: { x, y, z },
         tooltipPayload,
         tooltipPosition: { x: cx, y: cy },
@@ -139,7 +153,7 @@ class Scatter extends Component {
     };
   };
 
-  state = { activeIndex: -1, isAnimationFinished: false };
+  state = { isAnimationFinished: false };
 
   componentWillReceiveProps(nextProps) {
     const { animationId, points } = this.props;
@@ -163,7 +177,7 @@ class Scatter extends Component {
 
   id = uniqueId('recharts-scatter-');
 
-  renderSymbolItem(option, props) {
+  static renderSymbolItem(option, props) {
     let symbol;
 
     if (React.isValidElement(option)) {
@@ -190,7 +204,7 @@ class Scatter extends Component {
           {...filterEventsOfChild(this.props, entry, i)}
           key={`symbol-${i}`}
         >
-          {this.renderSymbolItem(activeIndex === i ? activeShape : shape, props)}
+          {this.constructor.renderSymbolItem(activeIndex === i ? activeShape : shape, props)}
         </Layer>
       );
     });
@@ -308,6 +322,10 @@ class Scatter extends Component {
 
     if (lineType === 'joint') {
       linePoints = points.map(entry => ({ x: entry.cx, y: entry.cy }));
+    } else if (lineType === 'fitting') {
+      const { xmin, xmax, a, b } = getLinearRegression(points);
+      const linearExp = x => a * x + b;
+      linePoints = [{ x: xmin, y: linearExp(xmin) }, { x: xmax, y: linearExp(xmax) }];
     }
     const lineProps = {
       ...scatterProps,
@@ -334,21 +352,21 @@ class Scatter extends Component {
 
   render() {
     const { hide, points, line, className, xAxis, yAxis, left, top, width,
-      height } = this.props;
-
+      height, id } = this.props;
     if (hide || !points || !points.length) { return null; }
-
+    const { isAnimationActive, isAnimationFinished } = this.state;
     const layerClass = classNames('recharts-scatter', className);
     const needClip = (xAxis && xAxis.allowDataOverflow) || (yAxis && yAxis.allowDataOverflow);
+    const clipPathId = _.isNil(id) ? this.id : id;
 
     return (
       <Layer
         className={layerClass}
-        clipPath={needClip ? `url(#clipPath-${this.id})` : null}
+        clipPath={needClip ? `url(#clipPath-${clipPathId})` : null}
       >
         {needClip ? (
           <defs>
-            <clipPath id={`clipPath-${this.id}`}>
+            <clipPath id={`clipPath-${clipPathId}`}>
               <rect x={left} y={top} width={width} height={height} />
             </clipPath>
           </defs>
@@ -358,6 +376,8 @@ class Scatter extends Component {
         <Layer key="recharts-scatter-symbols">
           {this.renderSymbols()}
         </Layer>
+        {(!isAnimationActive || isAnimationFinished) &&
+          LabelList.renderCallByParent(this.props, points)}
       </Layer>
     );
   }

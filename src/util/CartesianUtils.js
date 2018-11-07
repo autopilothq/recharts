@@ -1,5 +1,5 @@
-import { getPercentValue, isNumber, isNumOrStr } from './DataUtils';
-import { getValueByDataKey, getTicksOfScale, parseScale, checkDomainOfScale } from './ChartUtils';
+import _ from 'lodash';
+import { getTicksOfScale, parseScale, checkDomainOfScale, getBandSizeOfAxis } from './ChartUtils';
 
 /**
  * Calculate the scale function, position, width, height of axes
@@ -45,7 +45,7 @@ export const formatAxisMap = (props, axisMap, offset, axisType, chartName) => {
         offset.top + offset.height - (padding.bottom || 0),
       ];
     } else {
-      range = axis.range;
+      ({ range } = axis);
     }
 
     if (reversed) {
@@ -74,6 +74,9 @@ export const formatAxisMap = (props, axisMap, offset, axisType, chartName) => {
       width: axisType === 'xAxis' ? offset.width : axis.width,
       height: axisType === 'yAxis' ? offset.height : axis.height,
     };
+
+    finalAxis.bandSize = getBandSizeOfAxis(finalAxis, ticks);
+
     if (!axis.hide && axisType === 'xAxis') {
       steps[offsetKey] += (needSpace ? -1 : 1) * finalAxis.height;
     } else if (!axis.hide) {
@@ -83,3 +86,93 @@ export const formatAxisMap = (props, axisMap, offset, axisType, chartName) => {
     return { ...result, [id]: finalAxis };
   }, {});
 };
+
+export const rectWithPoints = ({ x: x1, y: y1 }, { x: x2, y: y2 }) => ({
+  x: Math.min(x1, x2),
+  y: Math.min(y1, y2),
+  width: Math.abs(x2 - x1),
+  height: Math.abs(y2 - y1),
+});
+
+/**
+ * Compute the x, y, width, and height of a box from two reference points.
+ * @param  {Object} coords     x1, x2, y1, and y2
+ * @return {Object} object
+ */
+export const rectWithCoords = ({ x1, y1, x2, y2 }) => rectWithPoints({ x: x1, y: y1 }, { x: x2, y: y2 });
+
+export class ScaleHelper {
+  static EPS = 1e-4;
+
+  static create(obj) {
+    return new ScaleHelper(obj);
+  }
+
+  constructor(scale) {
+    this.scale = scale;
+  }
+
+  get domain() {
+    return this.scale.domain;
+  }
+
+  get range() {
+    return this.scale.range;
+  }
+
+  get rangeMin() {
+    return this.range()[0];
+  }
+
+  get rangeMax() {
+    return this.range()[1];
+  }
+
+  get bandwidth() {
+    return this.scale.bandwidth;
+  }
+
+  apply(value, { bandAware } = {}) {
+    if (value === undefined) {
+      return undefined;
+    } if (bandAware) {
+      const offset = this.bandwidth ? this.bandwidth() / 2 : 0;
+      return this.scale(value) + offset;
+    }
+    return this.scale(value);
+  }
+
+  isInRange(value) {
+    const range = this.range();
+
+    const first = range[0];
+    const last = range[range.length - 1];
+
+    return first <= last ?
+      (value >= first && value <= last) :
+      (value >= last && value <= first);
+  }
+}
+
+export class LabeledScaleHelper {
+  static create(obj) {
+    return new this(obj);
+  }
+
+  constructor(scales) {
+    this.scales = _.mapValues(scales, ScaleHelper.create);
+    Object.assign(this, this.scales);
+  }
+
+  apply(coords, { bandAware } = {}) {
+    const { scales } = this;
+    return _.mapValues(
+      coords,
+      (value, label) => scales[label].apply(value, { bandAware }));
+  }
+
+  isInRange(coords) {
+    const { scales } = this;
+    return _.every(coords, (value, label) => scales[label].isInRange(value));
+  }
+}

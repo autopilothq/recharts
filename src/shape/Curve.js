@@ -61,6 +61,7 @@ class Curve extends Component {
     points: [],
     connectNulls: false,
   };
+
   /**
    * Calculate the path of curve
    * @return {String} path
@@ -72,37 +73,28 @@ class Curve extends Component {
     let lineFunction;
 
     if (_.isArray(baseLine)) {
+      const formatBaseLine = connectNulls ? baseLine.filter(base => defined(base)) : baseLine;
       const areaPoints = formatPoints.map((entry, index) => (
-        { ...entry, base: baseLine[index] }
+        { ...entry, base: formatBaseLine[index] }
       ));
       if (layout === 'vertical') {
-        lineFunction = shapeArea().y(getY)
-                                  .x1(getX)
-                                  .x0(d => d.base.x);
+        lineFunction = shapeArea().y(getY).x1(getX).x0(d => d.base.x);
       } else {
-        lineFunction = shapeArea().x(getX)
-                                  .y1(getY)
-                                  .y0(d => d.base.y);
+        lineFunction = shapeArea().x(getX).y1(getY).y0(d => d.base.y);
       }
-      lineFunction.defined(defined)
-                  .curve(curveFactory);
+      lineFunction.defined(defined).curve(curveFactory);
 
       return lineFunction(areaPoints);
-    } else if (layout === 'vertical' && isNumber(baseLine)) {
-      lineFunction = shapeArea().y(getY)
-                                .x1(getX)
-                                .x0(baseLine);
+    } if (layout === 'vertical' && isNumber(baseLine)) {
+      lineFunction = shapeArea().y(getY).x1(getX).x0(baseLine);
     } else if (isNumber(baseLine)) {
-      lineFunction = shapeArea().x(getX)
-                                .y1(getY)
-                                .y0(baseLine);
+      lineFunction = shapeArea().x(getX).y1(getY).y0(baseLine);
     } else {
-      lineFunction = shapeLine().x(getX)
-                                .y(getY);
+      lineFunction = shapeLine().x(getX).y(getY);
     }
 
     lineFunction.defined(defined)
-                .curve(curveFactory);
+      .curve(curveFactory);
 
     return lineFunction(formatPoints);
   }
@@ -118,7 +110,7 @@ class Curve extends Component {
     return (
       <path
         {...getPresentationAttributes(this.props)}
-        {...filterEventAttributes(this.props)}
+        {...filterEventAttributes(this.props, null, true)}
         className={classNames('recharts-curve', className)}
         d={realPath}
         ref={pathRef}

@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import components from '../component/index';
 
@@ -12,18 +12,16 @@ class App extends Component {
   renderList() {
     const items = Object.keys(components).map(key => {
       const group = components[key];
-      const list = Object.keys(group).map(c => {
-        const entry = group[c];
-
+      const list = Object.keys(group).map((c) => {
         return (
-          <li key={'component-' + c}>
-            <Link to={{ pathname: '/', query: { page: c, group: key } }}>{c}</Link>
+          <li key={`component-${c}`}>
+            <Link to={{ pathname: '/', search: `?group=${key}&component=${c}` }}>{c}</Link>
           </li>
         );
       });
 
       return (
-        <div key={'group-' + key} className="component-list-container">
+        <div key={`group-${key}`} className="component-list-container">
           <p className="group-name">{key}</p>
           <ul className="component-list">
             {list}
@@ -40,28 +38,30 @@ class App extends Component {
     );
   }
 
-  renderPageDetail() {
-    const { params, location } = this.props;
-    const { query } = location;
-    const { group, page } = query;
-
+  renderPageDetail(group, page) {
     return (
       <div className="component-wrapper">
         <p className="back"><Link to={{ pathname: '/' }}>Back to homepage</Link></p>
         <p className="title">{page}</p>
-        {components[group] && components[group][page] ? React.createElement(components[group][page]) : null}
+        {
+          components[group] &&
+          components[group][page] ? React.createElement(components[group][page]) : null
+        }
       </div>
     );
   }
 
   render() {
-    const { location, params } = this.props;
+    const { location } = this.props;
+    const { search } = location;
+    const group = /group=([a-zA-Z]+)/.exec(search);
+    const component = /component=([a-zA-Z]+)/.exec(search);
 
-    if (!location.query || !location.query.page) {
-      return this.renderList();
+    if (group && group.length === 2 && component && component.length === 2) {
+      return this.renderPageDetail(group[1], component[1]);
     }
 
-    return this.renderPageDetail();
+    return this.renderList();
   }
 }
 

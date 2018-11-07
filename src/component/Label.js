@@ -1,8 +1,9 @@
 import React, { cloneElement, isValidElement } from 'react';
 import PropTypes from 'prop-types';
 import _ from 'lodash';
+import classNames from 'classnames';
 import Text from './Text';
-import { getPresentationAttributes, findAllByType } from '../util/ReactUtils';
+import { PRESENTATION_ATTRIBUTES, getPresentationAttributes, findAllByType } from '../util/ReactUtils';
 import { isNumOrStr, isNumber, isPercent, getPercentValue, uniqueId,
   mathSign } from '../util/DataUtils';
 import { polarToCartesian } from '../util/PolarUtils';
@@ -23,6 +24,7 @@ const polarViewBoxShape = PropTypes.shape({
 });
 
 const propTypes = {
+  ...PRESENTATION_ATTRIBUTES,
   viewBox: PropTypes.oneOfType([cartesianViewBoxShape, polarViewBoxShape]),
   formatter: PropTypes.func,
   value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
@@ -31,12 +33,13 @@ const propTypes = {
     'top', 'left', 'right', 'bottom', 'inside', 'outside',
     'insideLeft', 'insideRight', 'insideTop', 'insideBottom',
     'insideTopLeft', 'insideBottomLeft', 'insideTopRight', 'insideBottomRight',
-    'insideStart', 'insideEnd', 'end', 'center',
+    'insideStart', 'insideEnd', 'end', 'center', 'centerTop', 'centerBottom'
   ]),
   children: PropTypes.oneOfType([
     PropTypes.arrayOf(PropTypes.node),
     PropTypes.node,
   ]),
+  className: PropTypes.string,
   content: PropTypes.oneOfType([PropTypes.element, PropTypes.func]),
 };
 
@@ -63,7 +66,7 @@ const getDeltaAngle = (startAngle, endAngle) => {
 };
 
 const renderRadialLabel = (labelProps, label, attrs) => {
-  const { position, viewBox, offset } = labelProps;
+  const { position, viewBox, offset, className } = labelProps;
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle,
     clockWise } = viewBox;
   const radius = (innerRadius + outerRadius) / 2;
@@ -89,13 +92,13 @@ const renderRadialLabel = (labelProps, label, attrs) => {
   const path = `M${startPoint.x},${startPoint.y}
     A${radius},${radius},0,1,${direction ? 0 : 1},
     ${endPoint.x},${endPoint.y}`;
-  const id = uniqueId('recharts-radial-line-');
+  const id = _.isNil(labelProps.id) ? uniqueId('recharts-radial-line-') : labelProps.id;
 
   return (
     <text
       {...attrs}
       dominantBaseline="central"
-      className="recharts-radial-bar-label"
+      className={classNames('recharts-radial-bar-label', className)}
     >
       <defs><path id={id} d={path} /></defs>
       <textPath xlinkHref={`#${id}`}>{label}</textPath>
@@ -128,6 +131,24 @@ const getAttrsOfPolarLabel = (props) => {
     };
   }
 
+  if (position === 'centerTop') {
+    return {
+      x: cx,
+      y: cy,
+      textAnchor: 'middle',
+      verticalAnchor: 'start',
+    };
+  }
+
+  if (position === 'centerBottom') {
+    return {
+      x: cx,
+      y: cy,
+      textAnchor: 'middle',
+      verticalAnchor: 'end',
+    };
+  }
+
   const r = (innerRadius + outerRadius) / 2;
   const { x, y } = polarToCartesian(cx, cy, r, midAngle);
 
@@ -149,7 +170,7 @@ const getAttrsOfCartesianLabel = (props) => {
       x: x + width / 2,
       y: y - sign * offset,
       textAnchor: 'middle',
-      verticalAnchor: 'end',
+      verticalAnchor: sign > 0 ? 'end' : 'start',
     };
   }
 
@@ -274,16 +295,25 @@ const getAttrsOfCartesianLabel = (props) => {
 const isPolar = viewBox => isNumber(viewBox.cx);
 
 function Label(props) {
-  const { viewBox, position, value, children, content } = props;
+  const { viewBox, position, value, children, content, className = '' } = props;
 
   if (!viewBox || (_.isNil(value) && _.isNil(children) &&
     !isValidElement(content) && !_.isFunction(content))) { return null; }
 
   if (isValidElement(content)) { return cloneElement(content, props); }
-  if (_.isFunction(content)) { return content(props); }
+
+  let label;
+  if (_.isFunction(content)) {
+    label = content(props);
+
+    if (isValidElement(label)) {
+      return label;
+    }
+  } else {
+    label = getLabel(props);
+  }
 
   const isPolarLabel = isPolar(viewBox);
-  const label = getLabel(props);
   const attrs = getPresentationAttributes(props);
 
   if (isPolarLabel && (position === 'insideStart' ||
@@ -297,10 +327,12 @@ function Label(props) {
 
   return (
     <Text
-      className="recharts-label"
+      className={classNames('recharts-label', className)}
       {...attrs}
       {...positionAttrs}
-    >{label}</Text>
+    >
+      {label}
+    </Text>
   );
 }
 
@@ -315,7 +347,7 @@ const parseViewBox = (props) => {
   if (isNumber(width) && isNumber(height)) {
     if (isNumber(x) && isNumber(y)) {
       return { x, y, width, height };
-    } else if (isNumber(top) && isNumber(left)) {
+    } if (isNumber(top) && isNumber(left)) {
       return { x: top, y: left, width, height };
     }
   }
@@ -371,11 +403,10 @@ const renderCallByParent = (parentProps, viewBox, ckeckPropsLabel = true) => {
   const { children } = parentProps;
   const parentViewBox = parseViewBox(parentProps);
 
-  const explicitChilren = findAllByType(children, Label).map((child, index) =>
-    cloneElement(child, {
-      viewBox: viewBox || parentViewBox,
-      key: `label-${index}`,
-    })
+  const explicitChilren = findAllByType(children, Label).map((child, index) => cloneElement(child, {
+    viewBox: viewBox || parentViewBox,
+    key: `label-${index}`,
+  })
   );
 
   if (!ckeckPropsLabel) { return explicitChilren; }

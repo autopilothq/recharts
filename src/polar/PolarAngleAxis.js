@@ -20,6 +20,7 @@ const eps = 1e-5;
 class PolarAngleAxis extends Component {
 
   static displayName = 'PolarAngleAxis';
+
   static axisType = 'angleAxis';
 
   static propTypes = {
@@ -48,6 +49,7 @@ class PolarAngleAxis extends Component {
     stroke: PropTypes.string,
     orientation: PropTypes.oneOf(['inner', 'outer']),
     tickFormatter: PropTypes.func,
+    allowDuplicatedCategory: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -62,6 +64,7 @@ class PolarAngleAxis extends Component {
     tickLine: true,
     tick: true,
     hide: false,
+    allowDuplicatedCategory: true,
   };
 
   /**
@@ -82,6 +85,7 @@ class PolarAngleAxis extends Component {
 
     return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
   }
+
   /**
    * Get the text-anchor of each tick
    * @param  {Object} data Data of ticks
@@ -128,7 +132,7 @@ class PolarAngleAxis extends Component {
     return <Polygon className="recharts-polar-angle-axis-line" {...props} points={points} />;
   }
 
-  renderTickItem(option, props, value) {
+  static renderTickItem(option, props, value) {
     let tickItem;
 
     if (React.isValidElement(option)) {
@@ -182,7 +186,7 @@ class PolarAngleAxis extends Component {
               {...lineCoord}
             />
           )}
-          {tick && this.renderTickItem(
+          {tick && this.constructor.renderTickItem(
             tick, tickProps, tickFormatter ? tickFormatter(entry.value) : entry.value
           )}
         </Layer>

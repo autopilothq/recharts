@@ -1,3 +1,8 @@
+const Enzyme = require('enzyme');
+const Adapter = require('enzyme-adapter-react-16');
+
+Enzyme.configure({ adapter: new Adapter() });
+
 // cartesian system chart component
 require('./specs/cartesian/XAxisSpec');
 require('./specs/cartesian/YAxisSpec');
@@ -41,6 +46,7 @@ require('./specs/component/TooltipSpec');
 require('./specs/component/ResponsiveContainerSpec');
 require('./specs/component/TextSpec');
 require('./specs/component/LabelSpec');
+require('./specs/component/LabelListSpec');
 
 // shape
 require('./specs/shape/CrossSpec');

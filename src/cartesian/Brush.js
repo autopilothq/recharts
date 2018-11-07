@@ -10,6 +10,8 @@ import { getValueByDataKey } from '../util/ChartUtils';
 import pureRender from '../util/PureRender';
 import Layer from '../container/Layer';
 import Text from '../component/Text';
+import { isNumber } from '../util/DataUtils';
+import { generatePrefixStyle } from '../util/CssPrefixUtils';
 
 @pureRender
 class Brush extends Component {
@@ -21,11 +23,12 @@ class Brush extends Component {
 
     fill: PropTypes.string,
     stroke: PropTypes.string,
-    x: PropTypes.number.isRequired,
-    y: PropTypes.number.isRequired,
-    width: PropTypes.number.isRequired,
+    x: PropTypes.number,
+    y: PropTypes.number,
+    width: PropTypes.number,
     height: PropTypes.number.isRequired,
     travellerWidth: PropTypes.number,
+    gap: PropTypes.number,
     padding: PropTypes.shape({
       top: PropTypes.number,
       right: PropTypes.number,
@@ -46,11 +49,9 @@ class Brush extends Component {
   };
 
   static defaultProps = {
-    x: 0,
-    y: 0,
-    width: 0,
     height: 40,
     travellerWidth: 5,
+    gap: 1,
     fill: '#fff',
     stroke: '#666',
     padding: { top: 1, right: 1, bottom: 1, left: 1 },
@@ -64,20 +65,23 @@ class Brush extends Component {
       endX: this.handleTravellerDragStart.bind(this, 'endX'),
     };
 
-    if (props.data && props.data.length) {
-      this.updateScale(props);
-    } else {
-      this.state = {};
-    }
+    this.state = props.data && props.data.length ? this.updateScale(props) : {};
   }
 
   componentWillReceiveProps(nextProps) {
     const { data, width, x, travellerWidth, updateId } = this.props;
 
-    if (nextProps.data !== data || nextProps.updateId !== updateId) {
-      this.updateScale(nextProps);
-    } else if (nextProps.width !== width || nextProps.x !== x ||
-      nextProps.travellerWidth !== travellerWidth) {
+    if (
+      (nextProps.data !== data || nextProps.updateId !== updateId) &&
+      nextProps.data &&
+      nextProps.data.length
+    ) {
+      this.setState(this.updateScale(nextProps));
+    } else if (
+      nextProps.width !== width ||
+      nextProps.x !== x ||
+      nextProps.travellerWidth !== travellerWidth
+    ) {
       this.scale.range([nextProps.x, nextProps.x + nextProps.width - nextProps.travellerWidth]);
       this.scaleValues = this.scale.domain().map(entry => this.scale(entry));
 
@@ -98,7 +102,7 @@ class Brush extends Component {
     }
   }
 
-  getIndexInRange(range, x) {
+  static getIndexInRange(range, x) {
     const len = range.length;
     let start = 0;
     let end = len - 1;
@@ -117,14 +121,15 @@ class Brush extends Component {
   }
 
   getIndex({ startX, endX }) {
+    const { gap, data } = this.props;
+    const lastIndex = data.length - 1;
     const min = Math.min(startX, endX);
     const max = Math.max(startX, endX);
-    const minIndex = this.getIndexInRange(this.scaleValues, min);
-    const maxIndex = this.getIndexInRange(this.scaleValues, max);
-
+    const minIndex = this.constructor.getIndexInRange(this.scaleValues, min);
+    const maxIndex = this.constructor.getIndexInRange(this.scaleValues, max);
     return {
-      startIndex: minIndex,
-      endIndex: maxIndex,
+      startIndex: minIndex - minIndex % gap,
+      endIndex: maxIndex === lastIndex ? lastIndex : maxIndex - maxIndex % gap,
     };
   }
 
@@ -231,13 +236,13 @@ class Brush extends Component {
   }
 
   handleTravellerMove(e) {
-    const { brushMoveStartX, movingTravellerId } = this.state;
+    const { brushMoveStartX, movingTravellerId, endX, startX } = this.state;
     const prevValue = this.state[movingTravellerId];
-    const { x, width, travellerWidth, onChange } = this.props;
 
+    const { x, width, travellerWidth, onChange, gap, data } = this.props;
     const params = { startX: this.state.startX, endX: this.state.endX };
-    let delta = e.pageX - brushMoveStartX;
 
+    let delta = e.pageX - brushMoveStartX;
     if (delta > 0) {
       delta = Math.min(delta, x + width - travellerWidth - prevValue);
     } else if (delta < 0) {
@@ -245,34 +250,48 @@ class Brush extends Component {
     }
 
     params[movingTravellerId] = prevValue + delta;
+
     const newIndex = this.getIndex(params);
+    const { startIndex, endIndex } = newIndex;
+    const isFullGap = () => {
+      const lastIndex = data.length - 1;
+      if ((movingTravellerId === 'startX' &&
+        (endX > startX ? startIndex % gap === 0 : endIndex % gap === 0)) ||
+        (endX < startX && endIndex === lastIndex) ||
+      (movingTravellerId === 'endX' &&
+        (endX > startX ? endIndex % gap === 0 : startIndex % gap === 0) ||
+        (endX > startX && endIndex === lastIndex))) {
+        return true;
+      }
+      return false;
+    };
 
     this.setState({
       [movingTravellerId]: prevValue + delta,
       brushMoveStartX: e.pageX,
     }, () => {
       if (onChange) {
-        onChange(newIndex);
+        if (isFullGap()) {
+          onChange(newIndex);
+        }
       }
     });
   }
 
   updateScale(props) {
     const { data, startIndex, endIndex, x, width, travellerWidth } = props;
-
-    if (data && data.length) {
-      const len = data.length;
-      this.scale = scalePoint().domain(_.range(0, len))
-                    .range([x, x + width - travellerWidth]);
-      this.scaleValues = this.scale.domain().map(entry => this.scale(entry));
-      this.state = {
-        isTextActive: false,
-        isSlideMoving: false,
-        isTravellerMoving: false,
-        startX: this.scale(startIndex),
-        endX: this.scale(endIndex),
-      };
-    }
+    const len = data.length;
+    this.scale = scalePoint()
+      .domain(_.range(0, len))
+      .range([x, x + width - travellerWidth]);
+    this.scaleValues = this.scale.domain().map(entry => this.scale(entry));
+    return {
+      isTextActive: false,
+      isSlideMoving: false,
+      isTravellerMoving: false,
+      startX: this.scale(startIndex),
+      endX: this.scale(endIndex),
+    };
   }
 
   renderBackground() {
@@ -307,10 +326,10 @@ class Brush extends Component {
     });
   }
 
-  renderTraveller(startX, id) {
+  renderTraveller(travellerX, id) {
     const { y, travellerWidth, height, stroke } = this.props;
     const lineY = Math.floor(y + height / 2) - 1;
-    const x = Math.max(startX, this.props.x);
+    const x = Math.max(travellerX, this.props.x);
 
     return (
       <Layer
@@ -406,13 +425,15 @@ class Brush extends Component {
   }
 
   render() {
-    const { data, className, children } = this.props;
+    const { data, className, children, x, y, width, height } = this.props;
     const { startX, endX, isTextActive, isSlideMoving, isTravellerMoving } = this.state;
 
-    if (!data || !data.length) { return null; }
+    if (!data || !data.length || !isNumber(x) || !isNumber(y) || !isNumber(width) ||
+      !isNumber(height) || width <= 0 || height <= 0) { return null; }
 
     const layerClass = classNames('recharts-brush', className);
     const isPanoramic = React.Children.count(children) === 1;
+    const style = generatePrefixStyle('userSelect', 'none');
 
     return (
       <Layer
@@ -422,6 +443,7 @@ class Brush extends Component {
         onMouseUp={this.handleDragEnd}
         onTouchEnd={this.handleDragEnd}
         onTouchMove={this.handleTouchMove}
+        style={style}
       >
         {this.renderBackground()}
         {isPanoramic && this.renderPanorama()}

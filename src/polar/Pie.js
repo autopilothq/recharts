@@ -17,7 +17,7 @@ import Cell from '../component/Cell';
 import { PRESENTATION_ATTRIBUTES, EVENT_ATTRIBUTES, LEGEND_TYPES,
   getPresentationAttributes, findAllByType, filterEventsOfChild, isSsr } from '../util/ReactUtils';
 import { polarToCartesian, getMaxRadius } from '../util/PolarUtils';
-import { isNumber, uniqueId, getPercentValue, mathSign, interpolateNumber } from '../util/DataUtils';
+import { isNumber, getPercentValue, mathSign, interpolateNumber, uniqueId } from '../util/DataUtils';
 import { getValueByDataKey } from '../util/ChartUtils';
 import { warn } from '../util/LogUtils';
 
@@ -43,6 +43,7 @@ class Pie extends Component {
     nameKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.func]),
     valueKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.func]),
     data: PropTypes.arrayOf(PropTypes.object),
+    blendStroke: PropTypes.bool,
     minAngle: PropTypes.number,
     legendType: PropTypes.oneOf(LEGEND_TYPES),
     maxRadius: PropTypes.number,
@@ -74,6 +75,7 @@ class Pie extends Component {
       'spring',
       'linear',
     ]),
+    id: PropTypes.string,
   };
 
   static defaultProps = {
@@ -101,6 +103,8 @@ class Pie extends Component {
     animationDuration: 1500,
     animationEasing: 'ease',
     nameKey: 'name',
+    // Match each sector's stroke color to it's fill color
+    blendStroke: false
   };
 
   static parseDeltaAngle = ({ startAngle, endAngle }) => {
@@ -160,12 +164,12 @@ class Pie extends Component {
 
     if (_.isNil(dataKey) && _.isNil(valueKey)) {
       warn(false,
-      `Use "dataKey" to specify the value of pie,
+        `Use "dataKey" to specify the value of pie,
       the props "valueKey" will be deprecated in 1.1.0`);
       realDataKey = 'value';
     } else if (_.isNil(dataKey)) {
       warn(false,
-      `Use "dataKey" to specify the value of pie,
+        `Use "dataKey" to specify the value of pie,
       the props "valueKey" will be deprecated in 1.1.0`);
       realDataKey = valueKey;
     }
@@ -174,10 +178,10 @@ class Pie extends Component {
       const val = getValueByDataKey(entry, realDataKey, 0);
       return result + (isNumber(val) ? val : 0);
     }, 0);
-    let sectors = [];
-    let prev;
+    let sectors;
 
     if (sum > 0) {
+      let prev;
       sectors = pieData.map((entry, i) => {
         const val = getValueByDataKey(entry, realDataKey, 0);
         const name = getValueByDataKey(entry, nameKey, i);
@@ -217,6 +221,7 @@ class Pie extends Component {
     return {
       ...coordinate,
       sectors,
+      data: pieData,
       onMouseLeave: onItemMouseLeave,
       onMouseEnter: onItemMouseEnter,
     };
@@ -227,26 +232,28 @@ class Pie extends Component {
   componentWillReceiveProps(nextProps) {
     const { animationId, sectors } = this.props;
 
-    if (nextProps.animationId !== animationId) {
+    if (nextProps.isAnimationActive !== this.props.isAnimationActive) {
+      this.cachePrevData([]);
+    } else if (nextProps.animationId !== animationId) {
       this.cachePrevData(sectors);
     }
   }
 
-  getTextAnchor(x, cx) {
+  static getTextAnchor(x, cx) {
     if (x > cx) {
       return 'start';
-    } else if (x < cx) {
+    } if (x < cx) {
       return 'end';
     }
 
     return 'middle';
   }
 
+  id = uniqueId('recharts-pie-');
+
   cachePrevData = (sectors) => {
     this.setState({ prevSectors: sectors });
   };
-
-  id = uniqueId('recharts-pie-');
 
   isActiveIndex(i) {
     const { activeIndex } = this.props;
@@ -259,63 +266,40 @@ class Pie extends Component {
   }
 
   handleAnimationEnd = () => {
+    const { onAnimationEnd } = this.props;
+
     this.setState({
       isAnimationFinished: true,
     });
+
+    if (_.isFunction(onAnimationEnd)) {
+      onAnimationEnd();
+    }
   };
 
-  renderClipPath() {
-    const { cx, cy, maxRadius, startAngle, isAnimationActive, animationDuration,
-      animationEasing, animationBegin, animationId } = this.props;
+  handleAnimationStart = () => {
+    const { onAnimationStart } = this.props;
 
-    return (
-      <defs>
-        <clipPath id={this.id}>
-          <Animate
-            easing={animationEasing}
-            isActive={isAnimationActive}
-            duration={animationDuration}
-            key={animationId}
-            animationBegin={animationBegin}
-            onAnimationEnd={this.handleAnimationEnd}
-            from={{
-              endAngle: startAngle,
-            }}
-            to={{
-              outerRadius: Math.max(this.props.outerRadius, maxRadius || 0),
-              innerRadius: 0,
-              endAngle: this.props.endAngle,
-            }}
-          >
-            {
-              ({ outerRadius, innerRadius, endAngle }) => (
-                <Sector
-                  cx={cx}
-                  cy={cy}
-                  outerRadius={outerRadius}
-                  innerRadius={innerRadius}
-                  startAngle={startAngle}
-                  endAngle={endAngle}
-                />
-              )
-            }
-          </Animate>
-        </clipPath>
-      </defs>
-    );
+    this.setState({
+      isAnimationFinished: false,
+    });
+
+    if (_.isFunction(onAnimationStart)) {
+      onAnimationStart();
+    }
   }
 
-  renderLabelLineItem(option, props) {
+  static renderLabelLineItem(option, props) {
     if (React.isValidElement(option)) {
       return React.cloneElement(option, props);
-    } else if (_.isFunction(option)) {
+    } if (_.isFunction(option)) {
       return option(props);
     }
 
     return <Curve {...props} type="linear" className="recharts-pie-label-line" />;
   }
 
-  renderLabelItem(option, props, value) {
+  static renderLabelItem(option, props, value) {
     if (React.isValidElement(option)) {
       return React.cloneElement(option, props);
     }
@@ -361,7 +345,7 @@ class Pie extends Component {
         stroke: 'none',
         ...customLabelProps,
         index: i,
-        textAnchor: this.getTextAnchor(endPoint.x, entry.cx),
+        textAnchor: this.constructor.getTextAnchor(endPoint.x, entry.cx),
         ...endPoint,
       };
       const lineProps = {
@@ -370,6 +354,7 @@ class Pie extends Component {
         fill: 'none',
         stroke: entry.fill,
         ...customLabelLineProps,
+        index: i,
         points: [polarToCartesian(entry.cx, entry.cy, entry.outerRadius, midAngle), endPoint],
       };
       let realDataKey = dataKey;
@@ -382,8 +367,12 @@ class Pie extends Component {
 
       return (
         <Layer key={`label-${i}`}>
-          {labelLine && this.renderLabelLineItem(labelLine, lineProps)}
-          {this.renderLabelItem(label, labelProps, getValueByDataKey(entry, realDataKey))}
+          {labelLine && this.constructor.renderLabelLineItem(labelLine, lineProps)}
+          {this.constructor.renderLabelItem(
+            label,
+            labelProps,
+            getValueByDataKey(entry, realDataKey)
+          )}
         </Layer>
       );
     });
@@ -391,12 +380,12 @@ class Pie extends Component {
     return <Layer className="recharts-pie-labels">{labels}</Layer>;
   }
 
-  renderSectorItem(option, props) {
+  static renderSectorItem(option, props) {
     if (React.isValidElement(option)) {
       return React.cloneElement(option, props);
-    } else if (_.isFunction(option)) {
+    } if (_.isFunction(option)) {
       return option(props);
-    } else if (_.isPlainObject(option)) {
+    } if (_.isPlainObject(option)) {
       return <Sector {...props} {...option} />;
     }
 
@@ -404,17 +393,25 @@ class Pie extends Component {
   }
 
   renderSectorsStatically(sectors) {
-    const { activeShape } = this.props;
+    const { activeShape, blendStroke } = this.props;
 
-    return sectors.map((entry, i) => (
-      <Layer
-        className="recharts-pie-sector"
-        {...filterEventsOfChild(this.props, entry, i)}
-        key={`sector-${i}`}
-      >
-        {this.renderSectorItem(this.isActiveIndex(i) ? activeShape : null, entry)}
-      </Layer>
-    ));
+    return sectors.map((entry, i) => {
+      const sectorOptions = this.isActiveIndex(i) ? activeShape : null;
+      const sectorProps = {
+        ...entry,
+        stroke: blendStroke ? entry.fill : entry.stroke
+      };
+
+      return (
+        <Layer
+          className="recharts-pie-sector"
+          {...filterEventsOfChild(this.props, entry, i)}
+          key={`sector-${i}`}
+        >
+          {this.constructor.renderSectorItem(sectorOptions, sectorProps)}
+        </Layer>
+      );
+    });
   }
 
   renderSectorsWithAnimation() {
@@ -431,6 +428,7 @@ class Pie extends Component {
         from={{ t: 0 }}
         to={{ t: 1 }}
         key={`pie-${animationId}`}
+        onAnimationStart={this.handleAnimationStart}
         onAnimationEnd={this.handleAnimationEnd}
       >
         {
@@ -495,25 +493,24 @@ class Pie extends Component {
 
   render() {
     const { hide, sectors, className, label, cx, cy, innerRadius,
-      outerRadius, isAnimationActive } = this.props;
+      outerRadius, isAnimationActive, prevSectors, id } = this.props;
 
-    if (hide || !sectors || !sectors.length || !isNumber(cx)
-      || !isNumber(cy) || !isNumber(innerRadius)
-      || !isNumber(outerRadius)) {
+    if (hide || !sectors || !sectors.length || !isNumber(cx) ||
+      !isNumber(cy) || !isNumber(innerRadius) ||
+      !isNumber(outerRadius)) {
       return null;
     }
 
-    const { isAnimationFinished } = this.state;
     const layerClass = classNames('recharts-pie', className);
 
     return (
       <Layer className={layerClass}>
-        <g clipPath={`url(#${this.id})`}>
+        <g clipPath={`url(#${_.isNil(id) ? this.id : id})`}>
           {this.renderSectors()}
         </g>
         {label && this.renderLabels(sectors)}
         {Label.renderCallByParent(this.props, null, false)}
-        {(!isAnimationActive || isAnimationFinished) &&
+        {(!isAnimationActive || (prevSectors && _.isEqual(prevSectors, sectors))) &&
           LabelList.renderCallByParent(this.props, sectors, false)}
       </Layer>
     );

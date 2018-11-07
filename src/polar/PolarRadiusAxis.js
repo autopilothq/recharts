@@ -16,6 +16,7 @@ import { polarToCartesian } from '../util/PolarUtils';
 class PolarRadiusAxis extends Component {
 
   static displayName = 'PolarRadiusAxis';
+
   static axisType = 'radiusAxis';
 
   static propTypes = {
@@ -46,11 +47,12 @@ class PolarRadiusAxis extends Component {
     ])),
     scale: PropTypes.oneOfType([
       PropTypes.oneOf(['auto', 'linear', 'pow', 'sqrt', 'log', 'identity', 'time',
-        'band', 'point', 'ordinal', 'quantile', 'quantize', 'utcTime', 'sequential',
+        'band', 'point', 'ordinal', 'quantile', 'quantize', 'utc', 'sequential',
         'threshold']),
       PropTypes.func,
     ]),
     allowDataOverflow: PropTypes.bool,
+    allowDuplicatedCategory: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -67,6 +69,7 @@ class PolarRadiusAxis extends Component {
     domain: [0, 'auto'],
     allowDataOverflow: false,
     scale: 'auto',
+    allowDuplicatedCategory: true,
   };
 
   /**
@@ -135,7 +138,7 @@ class PolarRadiusAxis extends Component {
     return <line className="recharts-polar-radius-axis-line" {...props} />;
   }
 
-  renderTickItem(option, props, value) {
+  static renderTickItem(option, props, value) {
     let tickItem;
 
     if (React.isValidElement(option)) {
@@ -181,7 +184,7 @@ class PolarRadiusAxis extends Component {
           key={`tick-${i}`}
           {...filterEventsOfChild(this.props, entry, i)}
         >
-          {this.renderTickItem(
+          {this.constructor.renderTickItem(
             tick, tickProps, tickFormatter ? tickFormatter(entry.value) : entry.value
           )}
         </Layer>

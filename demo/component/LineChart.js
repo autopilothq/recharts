@@ -300,7 +300,25 @@ const data03 = [
   { date: 'Dec 30 2016', price: 115.82 },
 ];
 
-const initilaState = {
+const series = [
+  {name: 'Series 1', data: [
+    {category: 'A', value: Math.random()},
+    {category: 'B', value: Math.random()},
+    {category: 'C', value: Math.random()}
+  ]},
+  {name: 'Series 2', data: [
+    {category: 'B', value: Math.random()},
+    {category: 'C', value: Math.random()},
+    {category: 'D', value: Math.random()}
+  ]},
+  {name: 'Series 3', data: [
+    {category: 'C', value: Math.random()},
+    {category: 'D', value: Math.random()},
+    {category: 'E', value: Math.random()}
+  ]},
+];
+
+const initialState = {
   data,
   data01,
   data02,
@@ -337,14 +355,18 @@ export default class Demo extends Component {
 
   static displayName = 'LineChartDemo';
 
-  state = initilaState;
+  state = initialState;
 
   handleChangeData = () => {
-    this.setState(() => _.mapValues(initilaState, changeNumberOfData));
+    this.setState(() => _.mapValues(initialState, changeNumberOfData));
   };
 
   handleClick = (data, e) => {
     console.log(data);
+  };
+
+  handleLineClick = (data, e) => {
+    console.log('callback', data, e);
   };
 
   handleLegendMouseEnter = () => {
@@ -352,6 +374,10 @@ export default class Demo extends Component {
       opacity: 0.5,
     });
   };
+
+  handleClickDot = (data, e) => {
+    console.log('dot click', data, e);
+  }
 
   handleLegendMouseLeave = () => {
     this.setState({
@@ -419,7 +445,7 @@ export default class Demo extends Component {
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
             syncId="test"
           >
-            <CartesianGrid stroke='#f5f5f5'/>
+            <CartesianGrid stroke='#f5f5f5' verticalFill={['rgba(0, 0, 0, 0.2)', 'rgba(255, 255, 255, 0.3)']} horizontalFill={['#ccc', '#fff']} />
             <Legend />
             <XAxis />
             <YAxis scale={scale} domain={[0.01, 'auto']} ticks={[0.01, 0.1, 1, 10, 100, 1000]} />
@@ -436,15 +462,23 @@ export default class Demo extends Component {
             height={400}
             data={data}
             margin={{top: 10, bottom: 10, left: 30, right: 30}}
-            onClick={this.handleClick}
           >
             <XAxis dataKey='name' />
             <CartesianGrid stroke='#f5f5f5'/>
             <Brush />
-            <Line type='monotone' key={'0'} dataKey='uv' stroke='#ff7300' yAxisId={0} activeDot={{fill: '#ff7300', stroke: 'none'}}/>
+            <Tooltip filterNull={false} />
+            <Line
+              type="monotone"
+              key="0"
+              dataKey="uv"
+              stroke="#ff7300"
+              strokeWidth={5}
+              yAxisId={0}
+              activeDot={{ onClick: this.handleClickDot }}
+              onClick={this.handleLineClick}
+            />
             {this.state.newLine && <Line type='monotone' key={'1'} dataKey='amt' stroke='#132908' yAxisId={1} activeDot={{fill: '#132908', stroke: 'none', r: 6}}/>}
             <Line type='monotone' key={'2'} dataKey='pv' stroke='#387908' yAxisId={1} activeDot={{fill: '#387908', stroke: 'none', r: 6}}/>
-            <Tooltip filterNull={false} />
           </LineChart>
         </div>
 
@@ -513,7 +547,7 @@ export default class Demo extends Component {
           </LineChart>
         </div>
 
-        <p>LineChart with panoramic brush</p>
+        <p>LineChart with panoramic brush and custom tooltip styles</p>
         <div className="line-chart-wrapper">
           <LineChart
             width={600} height={400} data={data03}
@@ -522,7 +556,14 @@ export default class Demo extends Component {
             <CartesianGrid vertical={false} />
             <XAxis dataKey="date" label="Date" />
             <YAxis domain={['auto', 'auto']} label="Stock Price" />
-            <Tooltip />
+            <Tooltip
+              wrapperStyle={{
+                borderColor: 'white',
+                boxShadow: '2px 2px 3px 0px rgb(204, 204, 204)',
+              }}
+              contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)' }}
+              labelStyle={{ fontWeight: 'bold', color: '#666666' }}
+            />
             <Line dataKey="price" stroke="#ff7300" dot={false} />
             <Brush dataKey="date" startIndex={data03.length - 40}>
               <AreaChart>
@@ -533,6 +574,21 @@ export default class Demo extends Component {
             </Brush>
           </LineChart>
         </div>
+
+        <p>LineChart repeates categories on x axis</p>
+        <div className="line-chart-wrapper">
+          <LineChart width={600} height={300}>
+            <XAxis dataKey="category" type="category" allowDuplicatedCategory={false} />
+            <YAxis dataKey="value"/>
+            <CartesianGrid strokeDasharray="3 3"/>
+            <Tooltip/>
+            <Legend />
+            {series.map(s => (
+              <Line dataKey="value" data={s.data} name={s.name} key={s.name} />
+            ))}
+          </LineChart>
+        </div>
+
       </div>
     );
   }
