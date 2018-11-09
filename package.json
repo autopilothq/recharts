@@ -12,7 +12,9 @@
     "es6",
     "lib",
     "umd",
-    "src"
+    "src",
+    ".babelrc",
+    "webpack.config.js"
   ],
   "keywords": [
     "react",
